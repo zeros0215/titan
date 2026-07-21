@@ -1,0 +1,33 @@
+{
+    "stock": {
+        "code": "005380",
+        "name": "Hyundai Motor"
+    },
+    "score": {
+        "raw": 45,
+        "normalized": 45,
+        "grade": "C",
+        "detail": {
+            "trend": 25,
+            "volume": 0,
+            "trading": 5,
+            "momentum": 5,
+            "breakout": 10,
+            "risk": 0
+        }
+    },
+    "recommendation": "HOLD",
+    "positive": [
+        "MA5 > MA20 단기 상승 흐름",
+        "MA20 > MA60 장기 상승 구조",
+        "거래대금 증가 (비율 1.04배)",
+        "20일 상승 추세 (2.0%)",
+        "고점 접근 상태 (92.7%)",
+        "최근 하락 위험 낮음"
+    ],
+    "negative": [
+        "현재가가 MA20 아래 위치 (추세 약화)",
+        "거래량 증가 신호 부족",
+        "최근 5일 상승 모멘텀 부족"
+    ]
+}

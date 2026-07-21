@@ -1,0 +1,33 @@
+{
+    "stock": {
+        "code": "068270",
+        "name": "Celltrion"
+    },
+    "score": {
+        "raw": 55,
+        "normalized": 55,
+        "grade": "B",
+        "detail": {
+            "trend": 30,
+            "volume": 5,
+            "trading": 5,
+            "momentum": 15,
+            "breakout": 0,
+            "risk": 0
+        }
+    },
+    "recommendation": "HOLD",
+    "positive": [
+        "현재가가 MA20 상단 위치 (중기 상승 추세)",
+        "MA5 > MA20 단기 상승 흐름",
+        "거래량 증가 (비율 1.11배)",
+        "거래대금 증가 (비율 1.17배)",
+        "5일 상승 모멘텀 (8.0%)",
+        "20일 상승 추세 (8.6%)",
+        "최근 하락 위험 낮음"
+    ],
+    "negative": [
+        "MA20 < MA60 장기 추세 약화",
+        "신고가 돌파 신호 부족"
+    ]
+}
