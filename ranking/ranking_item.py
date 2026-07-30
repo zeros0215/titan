@@ -1,29 +1,14 @@
-"""
-Ranking Item
-"""
-
 from dataclasses import dataclass
 
-from domain.stock import Stock
-
-from features.feature import Feature
-
-from factors.factor_score import FactorScore
-
-from strategy.strategy_result import StrategyResult
-
-from backtest.result import BacktestResult
+from analysis.analysis_result import AnalysisResult
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, frozen=True)
 class RankingItem:
+    """
+    랭킹에 포함되는 단일 종목
+    """
 
-    stock: Stock
+    rank: int
 
-    feature: Feature
-
-    factor: FactorScore
-
-    strategy: StrategyResult
-
-    result: BacktestResult | None = None
+    analysis: AnalysisResult

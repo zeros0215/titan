@@ -32,26 +32,19 @@ class PipelineEngine:
 
     ):
 
+        #
+        # Scan
+        #
         results = self.scanner.scan(stocks)
 
-        print(
-            "SCAN RESULT:",
-            len(results)
-        )
-
-
+        #
+        # Filter
+        #
         results = self.filter.filter(results)
 
-        print(
-            "FILTER RESULT:",
-            len(results)
-        )
-
-
+        #
+        # Ranking
+        #
         results = self.ranker.rank(results)
 
-        print(
-            "RANK RESULT:",
-            len(results)
-        )
         return results

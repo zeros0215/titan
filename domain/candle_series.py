@@ -3,6 +3,7 @@ Candle Series
 """
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from domain.candle import Candle
 from domain.stock import Stock
@@ -51,3 +52,14 @@ class CandleSeries:
 
     def __len__(self) -> int:
         return len(self.candles)
+
+    def until(self, as_of: datetime) -> "CandleSeries":
+        """Return the point-in-time view containing no future candles."""
+        return CandleSeries(
+            stock=self.stock,
+            candles=[
+                candle
+                for candle in self.candles
+                if candle.date <= as_of
+            ],
+        )

@@ -8,9 +8,9 @@ from broker.kis.header import HeaderBuilder
 
 class KisSession:
 
-    def __init__(self):
+    def __init__(self, client: KisClient | None = None):
 
-        self.client = KisClient()
+        self.client = client or KisClient()
         self.auth = KisAuth(self.client)
 
 

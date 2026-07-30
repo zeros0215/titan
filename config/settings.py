@@ -19,6 +19,8 @@ class Settings:
 
     market_provider: str
 
+    mock_scenario: str
+
     log_level: str
 
     kis_app_key: str
@@ -41,6 +43,14 @@ settings = Settings(
         "MARKET_PROVIDER",
 
         "MOCK"
+
+    ),
+
+    mock_scenario=os.getenv(
+
+        "MOCK_SCENARIO",
+
+        "BREAKOUT"
 
     ),
 

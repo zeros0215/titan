@@ -1,5 +1,0 @@
-TokenResponse
-
-↓
-
-KisToken

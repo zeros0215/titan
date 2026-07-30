@@ -27,11 +27,17 @@ from broker.kis.exception import (
 
 
 from config.settings import settings
+from threading import Lock
+from time import monotonic
 
 
 
 class KisAuth:
 
+    _shared_token = None
+    _token_lock = Lock()
+    _shared_error = None
+    _retry_after = 0.0
 
     def __init__(
 
@@ -49,20 +55,34 @@ class KisAuth:
 
     def get_token(self):
 
-        if (
+        if self._token is not None and not self._token.is_expired:
+            return self._token
 
-            self._token is None
+        shared = type(self)._shared_token
+        if shared is not None and not shared.is_expired:
+            self._token = shared
+            return shared
 
-            or
-
-            self._token.is_expired
-
-        ):
-
-            self._token = self._authenticate()
-
-
-        return self._token
+        with type(self)._token_lock:
+            shared = type(self)._shared_token
+            if shared is not None and not shared.is_expired:
+                self._token = shared
+                return shared
+            if (
+                type(self)._shared_error is not None
+                and monotonic() < type(self)._retry_after
+            ):
+                raise type(self)._shared_error
+            try:
+                self._token = self._authenticate()
+            except Exception as error:
+                type(self)._shared_error = error
+                type(self)._retry_after = monotonic() + 60.0
+                raise
+            type(self)._shared_token = self._token
+            type(self)._shared_error = None
+            type(self)._retry_after = 0.0
+            return self._token
 
 
 

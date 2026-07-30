@@ -7,3 +7,6 @@ output/
 __pycache__/
 
 *.pyc
+
+# Local API diagnostics and scratch scripts
+tmp_*.py

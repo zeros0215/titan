@@ -1,75 +1,44 @@
-"""
-ScoreEngine Test
-"""
-
 import unittest
 
-from scoring.result import ScoreResult
+from feature.feature import Feature
+from feature.feature_set import FeatureSet
+from feature.feature_type import FeatureType
+from scoring.policies.trend_policy import TrendPolicy
+from scoring.score_constants import ScoreConstants
+from scoring.score_result import ScoreResult
 
 
-class TestScoreResult(unittest.TestCase):
-
-    def test_total_score(self):
-
+class ScoreResultTest(unittest.TestCase):
+    def test_total_score_sums_category_scores(self) -> None:
         result = ScoreResult(
-
-            trend_score=40,
-
-            volume_score=20,
-
-            trading_score=20,
-
-            momentum_score=12,
-
-            breakout_score=0,
-
-            risk_penalty=0,
-
-            total_score=92,
-
-            grade="S"
-
+            trend_score=30,
+            momentum_score=15,
+            volume_score=15,
+            price_action_score=15,
+            risk_score=15,
+            context_score=10,
         )
 
-        self.assertEqual(
+        self.assertEqual(result.total_score, 100)
+        self.assertEqual(result.normalized_score, 100)
 
-            result.total_score,
+    def test_score_budget_is_100(self) -> None:
+        self.assertEqual(ScoreConstants.MAX_SCORE, 100)
 
-            92
+    def test_enabled_trend_conditions_receive_their_configured_budget(self) -> None:
+        features = FeatureSet()
+        for feature_type in (
+            FeatureType.PRICE_ABOVE_MA20,
+            FeatureType.PRICE_ABOVE_MA60,
+            FeatureType.MA5_ABOVE_MA20,
+            FeatureType.MA20_ABOVE_MA60,
+        ):
+            features.add(Feature.create_enabled(feature_type, 0.01, 0.01))
 
-        )
+        score = TrendPolicy().calculate(features)
 
-    def test_score_not_over_100(self):
-
-        result = ScoreResult(
-
-            trend_score=40,
-
-            volume_score=20,
-
-            trading_score=20,
-
-            momentum_score=20,
-
-            breakout_score=20,
-
-            risk_penalty=0,
-
-            total_score=100,
-
-            grade="S"
-
-        )
-
-        self.assertLessEqual(
-
-            result.total_score,
-
-            100
-
-        )
+        self.assertEqual(score, 30)
 
 
 if __name__ == "__main__":
-
     unittest.main()

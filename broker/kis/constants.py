@@ -79,18 +79,19 @@ ADJUSTED_PRICE = "1"
 
 
 
-"""
-KIS Market API
-"""
-
-DAILY_PRICE_URL = (
+DAILY_ITEM_CHART_PRICE_URL = (
     "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
 )
 
-TR_ID_DAILY_PRICE = "FHKST03010100"
+TR_DAILY_ITEM_CHART_PRICE = "FHKST03010100"
+DAILY_INDEX_CHART_PRICE_URL = (
+    "/uapi/domestic-stock/v1/quotations/inquire-daily-indexchartprice"
+)
+TR_DAILY_INDEX_CHART_PRICE = "FHKUP03500100"
 
-MARKET_DIVISION = "J"
+HOLIDAY_URL = "/uapi/domestic-stock/v1/quotations/chk-holiday"
+TR_HOLIDAY = "CTCA0903R"
 
-PERIOD_DAY = "D"
+ITEM_CHART_MARKET_DIVISION = "J"
 
-ORIGINAL_PRICE = "1"
+ITEM_CHART_ORIGINAL_PRICE = "1"

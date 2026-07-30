@@ -1,37 +1,7 @@
-"""
-TITAN Filter Policy
-"""
+from config.selection_criteria import SELECTION_CRITERIA
 
 
 class FilterPolicy:
+    """Compatibility access to the configuration-driven V1 criteria."""
 
-
-    #
-    # 최소 Score
-    #
-    # 후보군 확보 목적
-    #
-    MIN_SCORE = 40
-
-
-
-    #
-    # 거래량
-    #
-    # Ranking에서 판단
-    #
-    REQUIRE_VOLUME = False
-
-
-
-    #
-    # 거래대금
-    #
-    REQUIRE_TRADING = False
-
-
-
-    #
-    # Momentum
-    #
-    REQUIRE_MOMENTUM = False
+    MIN_SCORE = SELECTION_CRITERIA.minimum_score

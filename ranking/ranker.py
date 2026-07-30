@@ -1,10 +1,9 @@
 """
-TITAN Ranker
+Ranking Engine
 """
 
 
 class Ranker:
-
 
     def rank(
 
@@ -14,36 +13,12 @@ class Ranker:
 
     ):
 
-
         return sorted(
 
             results,
 
-            key=self._ranking_key,
+            key=lambda x: x.score.total_score,
 
             reverse=True
-
-        )
-
-
-    def _ranking_key(
-
-        self,
-
-        item
-
-    ):
-
-
-        score = item.score
-
-
-        return (
-
-            score.normalized_score,
-
-            -score.risk_penalty,
-
-            score.trading_score
 
         )
