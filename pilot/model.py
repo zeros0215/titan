@@ -30,3 +30,5 @@ class KisPilotResult:
     snapshot_path: Path | None = None
     report_path: Path | None = None
     reasons: list[str] = field(default_factory=list)
+    strategy_version: str = "V1.1"
+    source: str = "KIS"

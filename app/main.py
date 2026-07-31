@@ -48,7 +48,11 @@ from release.backtest_data import (
     promote_backtest_data,
 )
 from release.check import run_v1_release_check
-from analysis.sector_laggard import run_sector_laggard_backtest
+from analysis.industry_relative_strength import run_industry_rs_validation
+from analysis.morning_entry import (
+    build_collection_manifest,
+    evaluate_morning_bars,
+)
 
 
 def banner() -> None:
@@ -205,6 +209,11 @@ def build_parser() -> argparse.ArgumentParser:
     pilot.add_argument("--date", required=True, type=datetime.fromisoformat)
     pilot.add_argument("--top-n", type=int, default=5)
     pilot.add_argument(
+        "--strategy-version",
+        default="V1.1",
+        help="registered strategy profile used for daily selection",
+    )
+    pilot.add_argument(
         "--universe-dir",
         type=Path,
         default=Path(__file__).resolve().parent.parent / "resources" / "pilot",
@@ -219,6 +228,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--output-dir",
         type=Path,
         default=OUTPUT_DIR / "kis_pilot",
+    )
+    pilot.add_argument(
+        "--prefer-local-history",
+        action="store_true",
+        help="use promoted local daily prices when they cover the requested date",
     )
     pilot_report = commands.add_parser(
         "kis-pilot-report",
@@ -297,22 +311,53 @@ def build_parser() -> argparse.ArgumentParser:
     krx_price_build.add_argument("--universe-raw-dir", required=True, type=Path)
     krx_price_build.add_argument("--price-raw-dir", required=True, type=Path)
     krx_price_build.add_argument("--output-dir", required=True, type=Path)
-    sector_laggard = commands.add_parser(
-        "sector-laggard-test",
-        help="backtest laggards inside rising peer groups",
+    industry_rs = commands.add_parser(
+        "industry-rs-test",
+        help="validate stock relative strength against industry peers",
     )
-    sector_laggard.add_argument("--start-date", default="2022-04-01")
-    sector_laggard.add_argument("--end-date", default="2023-09-01")
-    sector_laggard.add_argument(
+    industry_rs.add_argument("--start-date", default="2022-04-01")
+    industry_rs.add_argument("--end-date", default="2023-09-01")
+    industry_rs.add_argument(
         "--active-data",
         type=Path,
         default=OUTPUT_DIR / "release" / "backtest_data.json",
     )
-    sector_laggard.add_argument(
+    industry_rs.add_argument(
         "--output-dir",
         type=Path,
-        default=OUTPUT_DIR / "sector_laggard",
+        default=OUTPUT_DIR / "industry_rs",
     )
+    morning_manifest = commands.add_parser(
+        "morning-entry-manifest",
+        help="list next-session intraday bars needed for 10:00 entry research",
+    )
+    morning_manifest.add_argument("--runs-dir", required=True, type=Path)
+    morning_manifest.add_argument("--strategy-version", required=True)
+    morning_manifest.add_argument(
+        "--candidate-field",
+        choices=(
+            "selected_candidates",
+            "observation_candidates",
+            "all_candidates",
+        ),
+        default="selected_candidates",
+    )
+    morning_manifest.add_argument("--start-date", type=date.fromisoformat)
+    morning_manifest.add_argument("--end-date", type=date.fromisoformat)
+    morning_manifest.add_argument(
+        "--active-data",
+        type=Path,
+        default=OUTPUT_DIR / "release" / "backtest_data.json",
+    )
+    morning_manifest.add_argument("--output", required=True, type=Path)
+    morning_check = commands.add_parser(
+        "morning-entry-check",
+        help="evaluate 09:00-10:00 five-minute bars for stable entry",
+    )
+    morning_check.add_argument("--bars", required=True, type=Path)
+    morning_check.add_argument("--previous-close", required=True, type=float)
+    morning_check.add_argument("--maximum-gap", type=float, default=0.03)
+    morning_check.add_argument("--maximum-range", type=float, default=0.04)
     return parser
 
 
@@ -357,9 +402,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Manifest: {args.output}")
         return 0
 
-    if args.command == "sector-laggard-test":
+    if args.command == "industry-rs-test":
         try:
-            result, paths = run_sector_laggard_backtest(
+            result, paths = run_industry_rs_validation(
                 args.active_data,
                 args.output_dir,
                 args.start_date,
@@ -372,16 +417,53 @@ def main(argv: list[str] | None = None) -> int:
             KeyError,
             json.JSONDecodeError,
         ) as error:
-            print(f"Sector laggard test failed: {error}")
+            print(f"Industry RS validation failed: {error}")
             return 2
-        raw = result["summaries"]["RAW"]
-        confirmed = result["summaries"]["CONFIRMED"]
         print(
-            f"Sector laggard: raw={raw['trades']} trades, "
-            f"confirmed={confirmed['trades']} trades"
+            f"Industry RS: {result['observation_count']} observations, "
+            f"{result['validation_date_count']} validation dates"
         )
-        print(f"Trades: {paths['csv']}")
+        print(f"Observations: {paths['csv']}")
         print(f"JSON: {paths['json']}")
+        return 0
+
+    if args.command == "morning-entry-manifest":
+        try:
+            _, price_dir, _ = load_active_backtest_data(args.active_data)
+            top500 = json.loads(
+                (price_dir / "market_cap_top500.json").read_text(encoding="utf-8")
+            )
+            sessions = sorted(
+                datetime.fromisoformat(value) for value in top500["sessions"]
+            )
+            result = build_collection_manifest(
+                args.runs_dir,
+                sessions,
+                args.output,
+                args.strategy_version,
+                candidate_field=args.candidate_field,
+                start_date=args.start_date,
+                end_date=args.end_date,
+            )
+        except (OSError, TypeError, ValueError, KeyError, json.JSONDecodeError) as error:
+            print(f"Morning entry manifest failed: {error}")
+            return 2
+        print(f"Intraday targets: {result['target_count']}")
+        print(f"Manifest: {args.output}")
+        return 0
+
+    if args.command == "morning-entry-check":
+        try:
+            result = evaluate_morning_bars(
+                args.bars,
+                args.previous_close,
+                args.maximum_gap,
+                args.maximum_range,
+            )
+        except (OSError, TypeError, ValueError, KeyError) as error:
+            print(f"Morning entry check failed: {error}")
+            return 2
+        print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
 
     if args.command == "v1-release-check":
@@ -422,6 +504,8 @@ def main(argv: list[str] | None = None) -> int:
                 args.universe_dir,
                 args.output_dir,
                 active_data_path=args.active_data,
+                strategy_version=args.strategy_version,
+                prefer_local_history=args.prefer_local_history,
             ).run(args.date, top_n=args.top_n)
         except (OSError, TypeError, ValueError, httpx.HTTPError) as error:
             print(f"KIS pilot failed: {error}")

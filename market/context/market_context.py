@@ -21,3 +21,9 @@ class MarketContext:
     institution_flow: float
 
     score: int = 0
+
+    kospi_short_trend: MarketTrend | None = None
+
+    kosdaq_short_trend: MarketTrend | None = None
+
+    short_market_strength: float | None = None

@@ -1,12 +1,14 @@
 import json
 from dataclasses import asdict, replace
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from pathlib import Path
 from time import perf_counter
 from uuid import uuid4
 
 from broker.kis.market import KisMarketProvider
+from broker.historical import HistoricalFileMarketProvider
+from data.quarantine import QualityQuarantinePolicy
 from pilot.model import KisPilotResult
 from pilot.report import generate_kis_pilot_markdown
 from repository.report_repository import ReportRepository
@@ -17,6 +19,7 @@ from repository.market_cap_stock_repository import MarketCapStockRepository
 from config.settings import settings
 from broker.kis.client import KisReadOnlyClient
 from broker.kis.session import KisSession
+from config.strategy_profiles import get_strategy_profile
 
 
 class KisPilotRunner:
@@ -25,20 +28,19 @@ class KisPilotRunner:
         universe_dir: Path,
         artifact_root: Path,
         active_data_path: Path | None = None,
+        strategy_version: str = "V1.1",
+        prefer_local_history: bool = False,
     ) -> None:
         self.universe_dir = universe_dir
         self.artifact_root = artifact_root
         self.active_data_path = active_data_path
+        self.strategy_version = strategy_version
+        self.prefer_local_history = prefer_local_history
 
     def run(self, as_of: datetime, top_n: int = 5) -> KisPilotResult:
         run_id = f"{as_of:%Y%m%dT%H%M%S}_{uuid4().hex[:8]}"
         run_artifact_root = self.artifact_root / "artifacts" / run_id
-        provider = KisMarketProvider(
-            session=KisSession(client=KisReadOnlyClient())
-        )
-        provider.session.client.minimum_interval_seconds = (
-            1.0 if settings.kis_mode.upper() == "VIRTUAL" else 0.06
-        )
+        price_dir = None
         if self.active_data_path is not None:
             universe_dir, price_dir, _ = load_active_backtest_data(
                 self.active_data_path
@@ -49,29 +51,64 @@ class KisPilotRunner:
             )
         else:
             stock_repository = StockRepository(self.universe_dir)
+        use_local_history = (
+            self.prefer_local_history
+            and price_dir is not None
+            and _history_covers(price_dir, as_of.date())
+        )
+        if use_local_history:
+            provider = HistoricalFileMarketProvider(price_dir)
+            client = None
+            quality_quarantine_policy = QualityQuarantinePolicy.from_file(
+                price_dir / "quality_quarantines.json"
+            )
+            source = "LOCAL_KRX"
+        else:
+            provider = KisMarketProvider(
+                session=KisSession(client=KisReadOnlyClient())
+            )
+            provider.session.client.minimum_interval_seconds = (
+                1.0 if settings.kis_mode.upper() == "VIRTUAL" else 0.06
+            )
+            client = provider.session.client
+            quality_quarantine_policy = None
+            source = "KIS"
+        profile = get_strategy_profile(self.strategy_version)
         runner = create_titan_runner(
             artifact_root=run_artifact_root,
             market_provider=provider,
             stock_repository=stock_repository,
+            strategy_version=profile.version,
+            criteria=profile.criteria,
+            quality_quarantine_policy=quality_quarantine_policy,
         )
         started = perf_counter()
         try:
             selection = runner.select(as_of, top_n=top_n)
         finally:
-            provider.session.close()
+            if isinstance(provider, KisMarketProvider):
+                provider.session.close()
         duration = perf_counter() - started
         quality = selection.quality_summary
-        client = provider.session.client
         universe_count = quality.total_count if quality else 0
         excluded = quality.excluded_count if quality else universe_count
         exclusion_rate = excluded / universe_count if universe_count else 1.0
-        requests = client.request_count
-        logical_requests = client.success_count + client.failure_count
+        requests = client.request_count if client is not None else 0
+        logical_requests = (
+            client.success_count + client.failure_count
+            if client is not None
+            else 0
+        )
         success_rate = (
             client.success_count / logical_requests
-            if logical_requests else 0.0
+            if client is not None and logical_requests
+            else 1.0
         )
-        retry_rate = client.retry_count / requests if requests else 0.0
+        retry_rate = (
+            client.retry_count / requests
+            if client is not None and requests
+            else 0.0
+        )
         reasons = []
         if selection.fetch_failures:
             reasons.append(
@@ -79,11 +116,11 @@ class KisPilotRunner:
             )
         if exclusion_rate > 0.05:
             reasons.append(f"품질 제외율 {exclusion_rate:.2%} > 5%")
-        if success_rate < 0.98:
+        if client is not None and success_rate < 0.98:
             reasons.append(f"API 성공률 {success_rate:.2%} < 98%")
         if retry_rate > 0.20:
             reasons.append(f"API 재시도율 {retry_rate:.2%} > 20%")
-        if client.order_request_count:
+        if client is not None and client.order_request_count:
             reasons.append(
                 f"읽기 전용 위반 {client.order_request_count}건"
             )
@@ -107,20 +144,28 @@ class KisPilotRunner:
             exclusion_rate=exclusion_rate,
             fetch_failures=selection.fetch_failures,
             request_count=requests,
-            success_count=client.success_count,
-            retry_count=client.retry_count,
+            success_count=client.success_count if client is not None else 0,
+            retry_count=client.retry_count if client is not None else 0,
             retry_rate=retry_rate,
-            failure_count=client.failure_count,
-            server_error_count=client.server_error_count,
-            transport_error_count=client.transport_error_count,
+            failure_count=client.failure_count if client is not None else 0,
+            server_error_count=(
+                client.server_error_count if client is not None else 0
+            ),
+            transport_error_count=(
+                client.transport_error_count if client is not None else 0
+            ),
             api_success_rate=success_rate,
-            order_request_count=client.order_request_count,
+            order_request_count=(
+                client.order_request_count if client is not None else 0
+            ),
             selected_candidates=self._candidate_rows(selection.selections),
             observation_candidates=self._candidate_rows(
                 selection.observations
             ),
             snapshot_path=selection.snapshot_path,
             reasons=reasons,
+            strategy_version=profile.version,
+            source=source,
         )
         report_repository = ReportRepository(self.artifact_root / "reports")
         report_path = report_repository.save(
@@ -180,3 +225,14 @@ class KisPilotRunner:
                 "negative_factors": list(analysis.negative_factors),
             })
         return rows
+
+
+def _history_covers(price_dir: Path, target: date) -> bool:
+    manifest_path = price_dir / "price_history_manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        coverage_start = date.fromisoformat(manifest["coverage_start"])
+        coverage_end = date.fromisoformat(manifest["coverage_end"])
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return False
+    return coverage_start <= target <= coverage_end

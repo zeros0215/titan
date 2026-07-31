@@ -2,12 +2,14 @@ from types import SimpleNamespace
 import unittest
 
 from config.selection_criteria import SELECTION_CRITERIA
+from config.strategy_profiles import V1_3_S78_N7_CANDIDATE
 from domain.enums import MarketType
 from filter.engine import FilterEngine
 from market.context.market_context import MarketContext
 from market.context.market_trend import MarketTrend
 from prediction.prediction_engine import PredictionEngine
 from prediction.prediction_grade import PredictionGrade
+from feature.feature_type import FeatureType
 from scoring.score_constants import ScoreConstants
 from scoring.score_result import ScoreResult
 
@@ -47,6 +49,21 @@ class SelectionCriteriaTest(unittest.TestCase):
 
         self.assertEqual(result, [accepted])
 
+    def test_v13_changes_score_and_limit_by_market_regime(self) -> None:
+        engine = FilterEngine(V1_3_S78_N7_CANDIDATE.criteria)
+        strong = self._v13_candidate(MarketTrend.BULL, .75, 75, 10)
+        normal = self._v13_candidate(MarketTrend.BULL, .65, 75, 10)
+        sideways = self._v13_candidate(MarketTrend.SIDEWAYS, .65, 83, 8)
+        sideways_hot = self._v13_candidate(
+            MarketTrend.SIDEWAYS, .65, 83, 9
+        )
+
+        self.assertEqual(engine.filter([strong, normal]), [strong])
+        self.assertEqual(engine.filter([sideways, sideways_hot]), [sideways])
+        self.assertEqual(engine.selection_limit([strong], 7), 7)
+        self.assertEqual(engine.selection_limit([normal], 7), 5)
+        self.assertEqual(engine.selection_limit([sideways], 7), 3)
+
     @staticmethod
     def _candidate(trend: MarketTrend, momentum_5: float):
         context = MarketContext(
@@ -73,6 +90,34 @@ class SelectionCriteriaTest(unittest.TestCase):
                 momentum=SimpleNamespace(momentum_5=momentum_5),
             ),
         )
+
+    @staticmethod
+    def _v13_candidate(trend, strength, score, momentum_5):
+        item = SelectionCriteriaTest._candidate(trend, momentum_5)
+        item.context = MarketContext(
+            kospi_trend=trend,
+            kosdaq_trend=trend,
+            market_strength=strength,
+            sector_strength=0.0,
+            theme_strength=0.0,
+            foreign_flow=0.0,
+            institution_flow=0.0,
+        )
+        item.score = ScoreResult(
+            trend_score=30,
+            momentum_score=10,
+            volume_score=10,
+            price_action_score=score - 70,
+            risk_score=10,
+            context_score=10,
+        )
+        item.features = SimpleNamespace(
+            contains=lambda feature: feature in {
+                FeatureType.LOW_VOLATILITY,
+                FeatureType.ACCELERATION,
+            }
+        )
+        return item
 
 
 if __name__ == "__main__":

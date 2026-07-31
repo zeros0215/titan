@@ -89,6 +89,11 @@ DAILY_INDEX_CHART_PRICE_URL = (
 )
 TR_DAILY_INDEX_CHART_PRICE = "FHKUP03500100"
 
+TIME_DAILY_CHART_PRICE_URL = (
+    "/uapi/domestic-stock/v1/quotations/inquire-time-dailychartprice"
+)
+TR_TIME_DAILY_CHART_PRICE = "FHKST03010230"
+
 HOLIDAY_URL = "/uapi/domestic-stock/v1/quotations/chk-holiday"
 TR_HOLIDAY = "CTCA0903R"
 

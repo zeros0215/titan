@@ -17,6 +17,9 @@ class MarketContextBuilder:
         kospi = self._summarize(series_list, "KOSPI")
         kosdaq = self._summarize(series_list, "KOSDAQ")
         all_market = self._summarize(series_list)
+        kospi_short = self._summarize(series_list, "KOSPI", 5)
+        kosdaq_short = self._summarize(series_list, "KOSDAQ", 5)
+        all_market_short = self._summarize(series_list, lookback_days=5)
 
         return MarketContext(
             kospi_trend=kospi[0],
@@ -29,18 +32,23 @@ class MarketContextBuilder:
             foreign_flow=0.0,
             institution_flow=0.0,
             score=self.strength_calculator.calculate_score(all_market[1]),
+            kospi_short_trend=kospi_short[0],
+            kosdaq_short_trend=kosdaq_short[0],
+            short_market_strength=all_market_short[1],
         )
 
     def _summarize(
         self,
         series_list: list[CandleSeries],
         market: str | None = None,
+        lookback_days: int | None = None,
     ) -> tuple[MarketTrend, float]:
+        horizon = lookback_days or self.lookback_days
         returns = [
-            self._return_rate(series)
+            self._return_rate(series, horizon)
             for series in series_list
             if self._matches_market(series, market)
-            and len(series) > self.lookback_days
+            and len(series) > horizon
         ]
         if not returns:
             return MarketTrend.SIDEWAYS, 0.0
@@ -57,8 +65,8 @@ class MarketContextBuilder:
         )
         return trend, strength
 
-    def _return_rate(self, series: CandleSeries) -> float:
-        start = series.closes[-self.lookback_days - 1]
+    def _return_rate(self, series: CandleSeries, lookback_days: int) -> float:
+        start = series.closes[-lookback_days - 1]
         return series.latest.close / start - 1 if start else 0.0
 
     @staticmethod

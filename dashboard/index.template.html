@@ -21,40 +21,58 @@
     .runner{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin:0 0 18px}.runner label{display:grid;gap:6px;color:var(--muted);font-size:12px}
     .runner input,.runner select,.runner button{height:42px;border-radius:10px;border:1px solid var(--line);font:inherit}.runner input,.runner select{background:#07111f;color:var(--text);padding:0 12px}.runner button{background:linear-gradient(90deg,var(--blue),var(--cyan));color:#03111c;font-weight:850;padding:0 18px;cursor:pointer}.runner button:disabled{opacity:.45;cursor:wait}
     .run-message{color:var(--muted);min-height:22px}.run-message.error{color:var(--red)}.run-message.good{color:var(--green)}
+    .news-check{border:1px solid var(--line);border-radius:8px;background:#102944;color:var(--cyan);padding:7px 10px;font:inherit;font-weight:800;cursor:pointer}.news-check:disabled{opacity:.45;cursor:wait}.news-list{display:grid;gap:10px;margin-top:14px}.news-item{display:grid;gap:3px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#07111f99}.news-item a{color:var(--text);font-weight:750;text-decoration:none;white-space:normal}.news-item a:hover{color:var(--cyan)}.news-meta{color:var(--muted);font-size:12px}.news-links{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}.news-links a{color:var(--cyan)}
     .tabs{display:flex;gap:8px;margin:0 0 18px}.tab-button{border:1px solid var(--line);border-radius:999px;background:#0d1b2d;color:var(--muted);padding:9px 16px;font-weight:800;cursor:pointer}.tab-button.active{background:var(--cyan);color:#03111c}.tab-panel{display:none}.tab-panel.active{display:grid}
     @media(max-width:800px){.hero,.metric,.half{grid-column:1/-1}.top{display:block}.stamp{text-align:left;margin-top:18px}.metrics{grid-template-columns:1fr 1fr}}
     #pattern-panel article:not(.sector){display:none}
   </style>
 </head>
 <body><main>
-  <div class="top"><div><div class="eyebrow">TITAN · KIS READ-ONLY</div><h1>V1.1 Pilot Console</h1><div class="sub">시점별 Top 500 기반 KIS 운영 안정성, 후보 점수와 데이터 품질을 한 화면에서 확인합니다. 주문 요청은 코드 수준에서 차단됩니다.</div></div><div class="stamp">마지막 생성<br><strong id="generated"></strong></div></div>
-  <nav class="tabs"><button class="tab-button active" data-tab="current-panel">현재 운영</button><button class="tab-button" data-tab="history-panel">과거 테스트·매도 결과</button><button class="tab-button" data-tab="pattern-panel">업종 후발주</button></nav>
+  <div class="top"><div><div class="eyebrow">TITAN · KIS READ-ONLY</div><h1>S80 Operations Console</h1><div class="sub">전날 S80 종목 선정, 다음 날 10시 매수 판단, 보유 종목의 익절·손절 상태를 확인합니다. 실제 주문 요청은 코드 수준에서 차단됩니다.</div></div><div class="stamp">마지막 생성<br><strong id="generated"></strong></div></div>
+  <nav class="tabs"><button class="tab-button active" data-tab="current-panel">현재 운영</button><button class="tab-button" data-tab="history-panel">과거 테스트·매도 결과</button><button class="tab-button" data-tab="breakout-panel">급등 전 검색</button><button class="tab-button" data-tab="pattern-panel">업종 대비 RS</button></nav>
   <section class="grid tab-panel active" id="current-panel">
-    <article class="card full"><h2>과거 테스트</h2><div class="sub">연간 테스트는 기존 로컬 KRX 자료를 사용하므로 빠르며 API를 호출하지 않습니다. 단일 날짜는 KIS 서버를 조회합니다. 두 결과 모두 공식 5거래일 검증과 분리됩니다.</div><div class="runner"><label>대상 연도<input id="test-year" type="number" min="2022" max="2026" step="1"></label><button id="run-year" type="button">연간 로컬 테스트</button><label>기준일<input id="test-date" type="date"></label><button id="run-test" type="button">KIS 단일 테스트</button><div class="run-message" id="run-message"></div></div></article>
-    <article class="card hero"><div class="label">5거래일 준비 상태</div><div class="big"><span id="days">0</span><small>/5</small></div><span class="status" id="status">COLLECTING</span><div class="progress"><div class="bar" id="bar"></div></div><div id="reason" class="sub"></div></article>
-    <article class="card metric"><div class="label">최신 실행</div><div class="metrics">
-      <div class="tile"><div class="label">API 성공률</div><div class="value" id="api">—</div></div>
-      <div class="tile"><div class="label">재시도율</div><div class="value" id="retry">—</div></div>
+    <article class="card full"><h2>현재 운영 전략</h2><div class="metrics"><div class="tile"><div class="label">운영 상태</div><div class="value" id="operational-label">—</div></div><div class="tile"><div class="label">전략 버전</div><div class="value" id="operational-version" style="font-size:16px">—</div></div></div><div class="sub" id="operational-summary"></div></article>
+    <article class="card full"><h2>오늘 해야 할 행동</h2><div class="big" id="today-action">확인 중</div><div class="sub" id="today-action-detail"></div><div class="sub" id="live-price-status">KIS 현재가 확인 전</div><div class="runner"><label>선정 기준일<input id="operational-selection-date" type="date"></label><button id="operational-selection-run" type="button">S80 종목 선정 실행</button><div class="run-message" id="operational-selection-message"></div></div></article>
+    <article class="card full"><h2>시장 데이터</h2><div class="sub">현재 활성 데이터: <strong id="data-coverage">—</strong>. KRX 원천 자료에서 누락된 거래일만 수집하고, 새 staging 검증이 성공한 경우에만 활성 데이터로 교체합니다.</div><div class="runner"><button id="data-update-run" type="button">누락 데이터 업데이트</button><div class="run-message" id="data-update-message"></div></div></article>
+    <article class="card full" style="display:none"><h2>과거 테스트</h2><div class="sub">연간 테스트는 기존 로컬 KRX 자료를 사용하므로 빠르며 API를 호출하지 않습니다. 단일 날짜는 KIS 서버를 조회합니다. 두 결과 모두 공식 5거래일 검증과 분리됩니다.</div><div class="runner"><label>대상 연도<input id="test-year" type="number" min="2022" max="2026" step="1"></label><button id="run-year" type="button">연간 로컬 테스트</button><label>기준일<input id="test-date" type="date"></label><button id="run-test" type="button">KIS 단일 테스트</button><div class="run-message" id="run-message"></div></div></article>
+    <article class="card hero" style="display:none"><div class="label">5거래일 준비 상태</div><div class="big"><span id="days">0</span><small>/5</small></div><span class="status" id="status">COLLECTING</span><div class="progress"><div class="bar" id="bar"></div></div><div id="reason" class="sub"></div></article>
+    <article class="card full" style="display:none"><div class="label">최신 선정 작업</div><div class="metrics">
+      <div class="tile"><div class="label" id="api-label">API 성공률</div><div class="value" id="api">—</div></div>
+      <div class="tile"><div class="label" id="retry-label">재시도율</div><div class="value" id="retry">—</div></div>
       <div class="tile"><div class="label">품질 제외율</div><div class="value" id="exclude">—</div></div>
       <div class="tile"><div class="label">조회 실패</div><div class="value" id="failures">—</div></div>
       <div class="tile"><div class="label">주문 요청</div><div class="value" id="orders">—</div></div>
       <div class="tile"><div class="label">분석 종목</div><div class="value" id="analyzed">—</div></div>
     </div></article>
-    <article class="card half"><h2>매수 선정 종목</h2><div class="sub">V1 매수 기준을 모두 통과한 후보</div><div class="scroll" id="selected"></div></article>
-    <article class="card half"><h2>관찰 종목</h2><div class="sub">70–79점의 비추천 추적군</div><div class="scroll" id="observed"></div></article>
-    <article class="card full"><h2>거래일별 실행 이력</h2><div class="scroll" id="history"></div><div class="legend"><span>통과 기준: API ≥98%</span><span>재시도 ≤20%</span><span>품질 제외 ≤5%</span><span>조회 실패 0</span><span>주문 요청 0</span></div></article>
+    <article class="card half"><h2>매수 선정 종목</h2><div class="sub" id="selected-note">V1 매수 기준을 모두 통과한 후보</div><div class="scroll" id="selected"></div></article>
+    <article class="card half"><h2>관찰 종목</h2><div class="sub" id="observed-note">70–79점의 비추천 추적군</div><div class="scroll" id="observed"></div></article>
+    <article class="card full" id="news-panel" style="display:none"><h2>기사·공시 보조 확인</h2><div class="sub" id="news-note">기사 본문이나 자동 매수 판단 없이 최근 기사 제목만 표시합니다.</div><div class="run-message" id="news-message"></div><div class="news-links" id="news-links"></div><div class="news-list" id="news-results"></div></article>
+    <article class="card full"><h2>당일 이벤트 후보 · 모의 운영</h2><div class="sub">9시 30분에는 참고 후보를 확인하고, 9시 50분~10시 10분 실행 결과만 10시 모의매수 표본으로 저장합니다. 당일 -1~+3%, 시가·VWAP 이상, 거래량 속도 2배 이상을 모두 확인하며 실제 주문은 실행하지 않습니다.</div><div class="runner"><button id="event-candidate-run" type="button">이벤트 후보 모의 검색</button><div class="run-message" id="event-candidate-message"></div></div><div class="scroll" id="event-candidates"></div><div class="sub" id="event-exclusion-summary"></div></article>
+    <article class="card full"><h2>이벤트 후보 모의 성과</h2><div class="sub">익절 +5% · 손절 -10% · 최대 20거래일. 일봉으로 전후를 구분할 수 없는 진입 당일은 매도 판정에서 제외합니다.</div><div class="metrics"><div class="tile"><div class="label">10시 진입 표본</div><div class="value" id="event-entry-total">0</div></div><div class="tile"><div class="label">완료 거래</div><div class="value" id="event-completed">0</div></div><div class="tile"><div class="label">승률</div><div class="value" id="event-win-rate">—</div></div><div class="tile"><div class="label">평균 수익률</div><div class="value" id="event-average">—</div></div></div><div class="scroll" id="event-shadow-trades"></div></article>
+    <article class="card full"><h2>보유 종목 관리</h2><div class="sub">실제 주문은 실행하지 않습니다. 수동 체결 내역을 입력하면 최신 종가 기준 익절·손절 상태를 표시합니다.</div><div class="runner"><label>종목코드<input id="position-code" maxlength="6" placeholder="005930"></label><label>종목명<input id="position-name" placeholder="삼성전자"></label><label>매수일<input id="position-date" type="date"></label><label>매수가<input id="position-price" type="number" min="1" step="1"></label><label>수량<input id="position-quantity" type="number" min="1" step="1"></label><button id="position-add" type="button">보유 종목 추가</button><div class="run-message" id="position-message"></div></div><div class="scroll" id="positions"></div></article>
+    <article class="card full" style="display:none"><h2>거래일별 실행 이력</h2><div class="scroll" id="history"></div><div class="legend"><span>통과 기준: API ≥98%</span><span>재시도 ≤20%</span><span>품질 제외 ≤5%</span><span>조회 실패 0</span><span>주문 요청 0</span></div></article>
   </section>
   <section class="grid tab-panel" id="history-panel">
-    <article class="card full"><h2>과거 월간·연간 테스트</h2><div class="sub">V1.1 기준선은 그대로 유지되며 모든 후보는 연구 결과로 별도 저장됩니다.</div><div class="runner"><label>전략 버전<select id="history-strategy"><option value="V1.1">V1.1 기준선</option><option value="V1.3-RISK-5D-CANDIDATE">V1.3 위험필터 5거래일 후보</option><option value="V1.2-5D-CANDIDATE">V1.2 5거래일 후보</option><option value="V1.2-GAP-CANDIDATE">V1.2 갭 ±3% 후보</option><option value="V1.2-CANDIDATE">이전 V1.2 탈락 후보</option></select></label><label>비교 그룹<select id="history-cohort"><option value="COMPARE">선정군·후보군 비교</option><option value="SELECTED">정식 선정군</option><option value="OBSERVATION">관찰 후보군</option></select></label><label>매도 기간<select id="history-holding"><option value="1">1거래일</option><option value="5">5거래일</option><option value="10">10거래일</option><option value="20">20거래일</option></select></label><label>대상 월<input id="history-month" type="month"></label><button id="history-month-run" type="button">월간 테스트 실행</button><label>대상 연도<input id="history-year" type="number" min="2022" max="2026" step="1"></label><button id="history-run" type="button">연간 테스트 실행</button><div class="run-message" id="history-message"></div></div></article>
+    <article class="card full"><h2>과거 월간·연간 테스트</h2><div class="sub">10시 지정가는 저장된 KIS 분봉이 있는 정식 선정군과 관찰 후보군을 모두 검증합니다. 분봉이 없는 종목은 미체결로 표시합니다. 익절률과 손절률을 비우면 전략 기본값을 사용합니다.</div><div class="runner"><label>전략 버전<select id="history-strategy"><option value="V1.1">V1.1 기준선</option><option value="V1.3-S78-N7-TP5-SL10-CANDIDATE">V1.3 +5% 익절·-10% 손절·최대20일</option><option value="V1.3-S80-N7-TP5-SL10-CANDIDATE">V1.3 점수80·10시 ±3% 후보</option><option value="V1.3-S78-N7-CANDIDATE">V1.3 점수78·최대7 후보</option><option value="V1.3-RISK-5D-CANDIDATE">V1.3 위험필터 5거래일 후보</option><option value="V1.2-5D-CANDIDATE">V1.2 5거래일 후보</option><option value="V1.2-GAP-CANDIDATE">V1.2 갭 ±3% 후보</option><option value="V1.2-CANDIDATE">이전 V1.2 탈락 후보</option></select></label><label>비교 그룹<select id="history-cohort"><option value="COMPARE">선정군·후보군 비교</option><option value="SELECTED">정식 선정군</option><option value="OBSERVATION">관찰 후보군</option></select></label><label>매도 기간<select id="history-holding"><option value="1">1거래일</option><option value="5">5거래일</option><option value="10">10거래일</option><option value="20">20거래일</option></select></label><label>매수 방식<select id="history-entry-mode"><option value="OPEN">다음 날 시가</option><option value="KIS_1000_LIMIT">다음 날 10시 지정가</option></select></label><label>매수 하한 (%)<input id="history-entry-minimum" type="number" min="-100" max="0" step="0.1" placeholder="제한 없음"></label><label>매수 상한 (%)<input id="history-entry-limit" type="number" min="0" max="100" step="0.1" value="3"></label><label>익절률 (%)<input id="history-profit-target" type="number" min="0.1" max="100" step="0.1" placeholder="전략 기본값"></label><label>손절률 (%)<input id="history-stop-loss" type="number" min="0.1" max="100" step="0.1" placeholder="전략 기본값"></label><label>대상 월<input id="history-month" type="month"></label><button id="history-month-run" type="button">월간 테스트 실행</button><label>대상 연도<input id="history-year" type="number" min="2022" max="2026" step="1"></label><button id="history-run" type="button">연간 테스트 실행</button><div class="run-message" id="history-message"></div></div></article>
     <article class="card full"><div class="metrics"><div class="tile"><div class="label">완료 거래</div><div class="value" id="trade-total">0</div></div><div class="tile"><div class="label">승리 거래</div><div class="value" id="trade-wins">0</div></div><div class="tile"><div class="label">순승률</div><div class="value" id="trade-win-rate">—</div></div><div class="tile"><div class="label">평균 순수익률</div><div class="value" id="trade-average">—</div></div></div></article>
+    <article class="card full"><h2>기간별 선정·관찰 후보</h2><div class="sub" id="history-candidate-note"></div><div class="scroll" id="history-candidates"></div></article>
     <article class="card full"><h2>그룹별 비교</h2><div class="scroll" id="cohort-comparison"></div></article>
     <article class="card full"><h2>선정 종목별 매도 결과</h2><div class="scroll" id="trade-history"></div></article>
   </section>
+  <section class="grid tab-panel" id="breakout-panel">
+    <article class="card full"><h2>급등 전 후보 검색</h2><div class="sub">변동성 수축, 거래량 건조 후 초기 증가, 60일 고점 근접, 추세 유지, 과열 제외를 기준일 당시 데이터만으로 평가합니다. 과거 날짜는 이후 10거래일 안에 +15% 도달 여부도 검증합니다.</div><div class="runner"><label>기준일<input id="breakout-date" type="date"></label><button id="breakout-run" type="button">급등 전 후보 검색</button><div class="run-message" id="breakout-message"></div></div></article>
+    <article class="card full"><div class="metrics"><div class="tile"><div class="label">시장 Breadth</div><div class="value" id="breakout-breadth">—</div></div><div class="tile"><div class="label">분석 종목</div><div class="value" id="breakout-analyzed">—</div></div><div class="tile"><div class="label">조건 충족</div><div class="value" id="breakout-qualified">—</div></div><div class="tile"><div class="label">검증 표본</div><div class="value" id="breakout-samples">—</div></div><div class="tile"><div class="label">10일 +15% 적중률</div><div class="value" id="breakout-hit-rate">—</div></div></div></article>
+    <article class="card full"><h2>검색 결과</h2><div class="sub" id="breakout-note"></div><div class="scroll" id="breakout-candidates"></div></article>
+    <article class="card full"><h2>월간 매수·매도 검증</h2><div class="sub">검색일의 MA20·MA60 시장 확산도로 강한 상승, 완만한 상승, 혼조, 하락을 구분합니다. 국면에 따라 최소 점수·최대 후보 수·목표수익률(+12%·+10%·+7%)을 조절하고 하락장에는 신규 진입을 차단합니다. 확인봉과 ATR 손절 기준은 모든 국면에서 동일하게 유지합니다.</div><div class="runner"><label>대상 월<input id="breakout-month" type="month"></label><button id="breakout-month-run" type="button">월간 검증 실행</button><div class="run-message" id="breakout-month-message"></div></div></article>
+    <article class="card full"><div class="metrics"><div class="tile"><div class="label">완료 거래</div><div class="value" id="breakout-trades">—</div></div><div class="tile"><div class="label">승률</div><div class="value" id="breakout-win-rate">—</div></div><div class="tile"><div class="label">평균 순수익</div><div class="value" id="breakout-average">—</div></div><div class="tile"><div class="label">평균 보유</div><div class="value" id="breakout-holding">—</div></div></div></article>
+    <article class="card full"><h2>월간 거래 내역</h2><div class="sub" id="breakout-month-note"></div><div class="scroll" id="breakout-trades-table"></div></article>
+  </section>
   <section class="grid tab-panel" id="pattern-panel">
-    <article class="card full sector"><h2>상승 업종 후발주 백테스트</h2><div class="sub">은행·손해보험·정유·백화점 그룹이 함께 오를 때 5일 수익률이 중앙값보다 3%p 이상 뒤처진 종목을 다음 거래일 시가에 매수합니다. 격차가 1%p 이내로 줄거나 5거래일이 되면 종가 매도합니다.</div><div class="runner"><label>시작일<input id="sector-start-date" type="date" value="2022-04-01"></label><label>종료일<input id="sector-end-date" type="date" value="2023-09-01"></label><button id="sector-run" type="button">후발주 테스트 실행</button><div class="run-message" id="sector-message"></div></div></article>
-    <article class="card full sector"><h2>검증 결과</h2><div class="scroll" id="sector-summary"></div><div id="sector-verdict" class="sub"></div></article>
-    <article class="card full sector"><h2>업종별 결과</h2><div class="scroll" id="sector-groups"></div></article>
-    <article class="card full sector"><h2>최근 후보</h2><div class="scroll" id="sector-candidates"></div></article>
+    <article class="card full sector"><h2>업종 대비 종목 RS 검증</h2><div class="sub">20·60·120·240거래일 수익률을 가중하고, 자기 종목을 제외한 업종 중앙값과의 차이를 0~100 percentile로 변환합니다. RS 상위 구간이 이후 5·20·60거래일에도 우세한지 검증합니다.</div><div class="runner"><label>시작일<input id="sector-start-date" type="date" value="2022-04-01"></label><label>종료일<input id="sector-end-date" type="date" value="2023-09-01"></label><button id="sector-run" type="button">RS 검증 실행</button><div class="run-message" id="sector-message"></div></div></article>
+    <article class="card full sector"><h2>기간별 검증 결과</h2><div class="scroll" id="sector-summary"></div><div id="sector-verdict" class="sub"></div></article>
+    <article class="card full sector"><h2>RS 구간별 이후 수익률</h2><div class="scroll" id="sector-buckets"></div></article>
+    <article class="card full sector"><h2>업종별 표본</h2><div class="scroll" id="sector-groups"></div></article>
+    <article class="card full sector"><h2>최근 RS 순위</h2><div class="scroll" id="sector-candidates"></div></article>
     <article class="card full"><div class="metrics">
       <div class="tile"><div class="label">학습 표본</div><div class="value" id="pattern-samples">—</div></div>
       <div class="tile"><div class="label">검증 월</div><div class="value" id="pattern-folds">—</div></div>
@@ -74,26 +92,177 @@
 </main>
 <script>
 const D=__TITAN_DATA__;
+const breakoutDate=document.querySelector('#breakout-date');
+const breakoutButton=document.querySelector('#breakout-run');
+const breakoutMessage=document.querySelector('#breakout-message');
+const breakoutMonth=document.querySelector('#breakout-month');
+const breakoutMonthButton=document.querySelector('#breakout-month-run');
+const breakoutMonthMessage=document.querySelector('#breakout-month-message');
+breakoutDate.value=sessionStorage.getItem('titan-breakout-date')||(D.data_status&&D.data_status.coverage_end)||'';
+breakoutMonth.value=sessionStorage.getItem('titan-breakout-month')||breakoutDate.value.slice(0,7);
+breakoutButton.addEventListener('click',async()=>{
+  if(!breakoutDate.value)return;
+  breakoutButton.disabled=true;
+  breakoutMessage.className='run-message';
+  breakoutMessage.textContent='로컬 KRX 데이터에서 급등 전 구조를 검색 중입니다.';
+  sessionStorage.setItem('titan-breakout-date',breakoutDate.value);
+  sessionStorage.setItem('titan-active-tab','breakout-panel');
+  try{
+    const response=await fetch('/api/run-pre-breakout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:breakoutDate.value})});
+    const result=await jsonResponse(response);
+    if(!response.ok)throw new Error(result.message||'검색에 실패했습니다.');
+    breakoutMessage.className='run-message good';
+    breakoutMessage.textContent=`${result.analyzed_count}종목 분석, ${result.qualified_count}종목 조건 충족`;
+    setTimeout(reloadPreservingView,500);
+  }catch(error){
+    breakoutMessage.className='run-message error';
+    breakoutMessage.textContent=error.message;
+    breakoutButton.disabled=false;
+  }
+});
+breakoutMonthButton.addEventListener('click',async()=>{
+  if(!breakoutMonth.value)return;
+  breakoutMonthButton.disabled=true;
+  breakoutMonthMessage.className='run-message';
+  breakoutMonthMessage.textContent='매 거래일 신호를 검색하고 매수·매도 시점을 검증 중입니다.';
+  sessionStorage.setItem('titan-breakout-month',breakoutMonth.value);
+  sessionStorage.setItem('titan-active-tab','breakout-panel');
+  try{
+    const response=await fetch('/api/run-pre-breakout-month',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({month:breakoutMonth.value})});
+    const result=await jsonResponse(response);
+    if(!response.ok)throw new Error(result.message||'월간 검증에 실패했습니다.');
+    breakoutMonthMessage.className='run-message good';
+    breakoutMonthMessage.textContent=`${result.trades}건 거래 검증 완료 · 승률 ${pct(result.win_rate)}`;
+    setTimeout(reloadPreservingView,500);
+  }catch(error){
+    breakoutMonthMessage.className='run-message error';
+    breakoutMonthMessage.textContent=error.message;
+    breakoutMonthButton.disabled=false;
+  }
+});
+const dataUpdateButton=document.querySelector('#data-update-run');
+const dataUpdateMessage=document.querySelector('#data-update-message');
+const operationalSelectionDate=document.querySelector('#operational-selection-date');
+const operationalSelectionButton=document.querySelector('#operational-selection-run');
+const operationalSelectionMessage=document.querySelector('#operational-selection-message');
+operationalSelectionDate.value=sessionStorage.getItem('titan-operational-view-date')||latestKisTestDate();
+operationalSelectionButton.addEventListener('click',async()=>{
+  if(!operationalSelectionDate.value){
+    operationalSelectionMessage.className='run-message error';
+    operationalSelectionMessage.textContent='선정 기준일을 입력해 주세요.';
+    return;
+  }
+  operationalSelectionButton.disabled=true;
+  operationalSelectionMessage.className='run-message';
+  operationalSelectionMessage.textContent='KIS에서 당일 확정 일봉을 조회해 S80 종목을 선정 중입니다.';
+  try{
+    const response=await fetch('/api/run-operational-selection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:operationalSelectionDate.value})});
+    const result=await jsonResponse(response);
+    if(!response.ok)throw new Error(result.message||'S80 종목 선정에 실패했습니다.');
+    operationalSelectionMessage.className='run-message good';
+    operationalSelectionMessage.textContent=result.message;
+    sessionStorage.setItem('titan-operational-view-date',result.date);
+    setTimeout(reloadPreservingView,700);
+  }catch(error){
+    operationalSelectionMessage.className='run-message error';
+    operationalSelectionMessage.textContent=error.message;
+    operationalSelectionButton.disabled=false;
+  }
+});
+const eventCandidateButton=document.querySelector('#event-candidate-run');
+const eventCandidateMessage=document.querySelector('#event-candidate-message');
+const eventCandidateTable=document.querySelector('#event-candidates');
+const eventExclusionSummary=document.querySelector('#event-exclusion-summary');
+eventCandidateButton.addEventListener('click',async()=>{
+  eventCandidateButton.disabled=true;
+  eventCandidateMessage.className='run-message';
+  eventCandidateMessage.textContent='KIS 현재가·거래량을 확인하고 기사 제목을 결합 중입니다. 1분 이상 걸릴 수 있습니다.';
+  eventCandidateTable.innerHTML='';
+  try{
+    const response=await fetch('/api/run-event-candidates',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    const result=await jsonResponse(response);
+    if(!response.ok)throw new Error(result.message||'이벤트 후보 검색에 실패했습니다.');
+    const rows=result.candidates||[];
+    const phaseNames={EARLY:'9시 30분 전 참고',PREVIEW:'사전 참고',ENTRY:'10시 모의매수 표본',LATE:'10시 이후 참고'};
+    eventCandidateMessage.className='run-message good';
+    eventCandidateMessage.textContent=`${phaseNames[result.snapshot_phase]||result.snapshot_phase} · ${result.message} 1차 대상 ${result.eligible_count} → 사전 필터 ${result.prefiltered_count} → 조회 ${result.quoted_count}종목 · 실패 ${result.failure_count}건`;
+    eventCandidateTable.innerHTML=rows.length?'<table><thead><tr><th>종목</th><th>현재가</th><th>당일 등락</th><th>시가</th><th>VWAP</th><th>거래량 속도</th><th>기사</th><th>근거</th></tr></thead><tbody>'+rows.map(x=>{const first=(x.headlines||[])[0];return `<tr><td>${safe(x.name)} (${safe(x.code)})</td><td>${Number(x.close).toLocaleString()}</td><td class="${Number(x.change_rate)>=0?'good':'bad'}">${pct(x.change_rate)}</td><td>${Number(x.open).toLocaleString()}</td><td>${Number(x.vwap).toLocaleString(undefined,{maximumFractionDigits:0})}</td><td><strong>${Number(x.volume_speed).toFixed(2)}배</strong></td><td>${first?`<a href="${safe(first.url)}" target="_blank" rel="noopener">${safe(first.title)}</a>${x.headline_count>1?` 외 ${x.headline_count-1}건`:''}`:'제목 없음'}</td><td class="watch">등락 범위·시가·VWAP·거래량 통과</td></tr>`}).join('')+'</tbody></table>':'<div class="empty">현재 조건을 모두 충족한 이벤트 후보가 없습니다.</div>';
+    const reasons=result.evaluation_summary||{};
+    eventExclusionSummary.textContent=`탈락: 등락 범위 ${reasons.PRICE_OUT_OF_RANGE||0} · 시가 아래 ${reasons.BELOW_OPEN||0} · VWAP 아래 ${reasons.BELOW_VWAP||0} · 거래량 부족 ${reasons.VOLUME_NOT_ACCELERATING||0}`;
+  }catch(error){
+    eventCandidateMessage.className='run-message error';
+    eventCandidateMessage.textContent=error.message;
+  }finally{
+    eventCandidateButton.disabled=false;
+  }
+});
+document.querySelector('#data-coverage').textContent=(D.data_status&&D.data_status.coverage_end)||'확인 불가';
+dataUpdateButton.addEventListener('click',async()=>{
+  dataUpdateButton.disabled=true;
+  dataUpdateMessage.className='run-message';
+  dataUpdateMessage.textContent='KRX 누락 자료를 수집하고 새 staging을 검증 중입니다. 몇 분 걸릴 수 있습니다.';
+  try{
+    const response=await fetch('/api/run-data-update',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    const result=await jsonResponse(response);
+    if(!response.ok)throw new Error(result.message||'데이터 업데이트에 실패했습니다.');
+    dataUpdateMessage.className='run-message good';
+    dataUpdateMessage.textContent=`${result.message} 기준일 ${result.coverage_end}`;
+    setTimeout(reloadPreservingView,700);
+  }catch(error){
+    dataUpdateMessage.className='run-message error';
+    dataUpdateMessage.textContent=error.message;
+    dataUpdateButton.disabled=false;
+  }
+});
 const sectorStart=document.querySelector('#sector-start-date');
 const sectorEnd=document.querySelector('#sector-end-date');
 const sectorButton=document.querySelector('#sector-run');
 const sectorMessage=document.querySelector('#sector-message');
-sectorStart.value=sessionStorage.getItem('titan-sector-start')||(D.sector_laggard&&D.sector_laggard.period.start)||'2022-04-01';
-sectorEnd.value=sessionStorage.getItem('titan-sector-end')||(D.sector_laggard&&D.sector_laggard.period.end)||'2023-09-01';
+sectorStart.value=sessionStorage.getItem('titan-sector-start')||(D.industry_rs&&D.industry_rs.period.start)||'2022-04-01';
+sectorEnd.value=sessionStorage.getItem('titan-sector-end')||(D.industry_rs&&D.industry_rs.period.end)||'2023-09-01';
 sectorButton.addEventListener('click',async()=>{
-  sectorButton.disabled=true; sectorMessage.className='run-message'; sectorMessage.textContent='업종별 후발주 신호와 익일 시가 매수 성과를 계산 중입니다.';
+  sectorButton.disabled=true; sectorMessage.className='run-message'; sectorMessage.textContent='다기간 업종 대비 RS와 이후 수익률을 계산 중입니다.';
   sessionStorage.setItem('titan-sector-start',sectorStart.value); sessionStorage.setItem('titan-sector-end',sectorEnd.value);
   try{
-    const response=await fetch('/api/run-sector-laggard',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({start_date:sectorStart.value,end_date:sectorEnd.value})});
-    const result=await response.json();
+    const response=await fetch('/api/run-industry-rs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({start_date:sectorStart.value,end_date:sectorEnd.value})});
+    const result=await jsonResponse(response);
     if(!response.ok)throw new Error(result.message||'테스트에 실패했습니다.');
-    sectorMessage.className='run-message good'; sectorMessage.textContent=`전체 ${result.raw_trades}건, 거래량 확인 ${result.confirmed_trades}건 검증 완료`;
+    sectorMessage.className='run-message good'; sectorMessage.textContent=`${result.validation_dates}개 기준일, ${result.observations}개 관측치 검증 완료`;
     setTimeout(reloadPreservingView,500);
   }catch(error){sectorMessage.className='run-message error';sectorMessage.textContent=error.message;sectorButton.disabled=false}
 });
 const pct=v=>v==null?'—':(v*100).toFixed(2)+'%';
+const eventSafe=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+const eventShadow=D.event_shadow||{trades:[],entry_candidates:0,completed:0};
+document.querySelector('#event-entry-total').textContent=eventShadow.entry_candidates||0;
+document.querySelector('#event-completed').textContent=eventShadow.completed||0;
+document.querySelector('#event-win-rate').textContent=pct(eventShadow.win_rate);
+document.querySelector('#event-average').textContent=pct(eventShadow.average_net_return);
+const eventReasonNames={TAKE_PROFIT:'익절',STOP_LOSS:'손절',TIME_EXIT:'기간 만료',TRACKING:'추적 중'};
+document.querySelector('#event-shadow-trades').innerHTML=(eventShadow.trades||[]).length?'<table><thead><tr><th>진입일</th><th>종목</th><th>10시 기준가</th><th>최신/매도가</th><th>수익률</th><th>상태</th></tr></thead><tbody>'+eventShadow.trades.slice().reverse().map(x=>{const completed=x.net_return!=null;const displayPrice=completed?x.exit_price:x.latest_price;const displayReturn=completed?x.net_return:(x.latest_price/x.entry_price-1);return `<tr><td>${eventSafe(x.entry_date)}</td><td>${eventSafe(x.name)} (${eventSafe(x.code)})</td><td>${Number(x.entry_price).toLocaleString()}</td><td>${Number(displayPrice).toLocaleString()}</td><td class="${displayReturn>=0?'good':'bad'}">${pct(displayReturn)}</td><td class="${x.exit_reason==='TAKE_PROFIT'?'good':x.exit_reason==='STOP_LOSS'?'bad':'watch'}">${eventReasonNames[x.exit_reason]||eventSafe(x.exit_reason)}</td></tr>`}).join('')+'</tbody></table>':'<div class="empty">9시 50분~10시 10분에 저장된 이벤트 후보가 아직 없습니다.</div>';
+async function jsonResponse(response){
+  const contentType=response.headers.get('content-type')||'';
+  if(!contentType.includes('application/json')){
+    const body=await response.text();
+    const hint=body.trim().startsWith('<')
+      ?'대시보드 서버가 이전 버전이거나 정적 HTML로 열렸습니다. 서버를 종료한 뒤 python -m tools.kis_dashboard_server 로 다시 실행해 주세요.'
+      :'서버가 JSON이 아닌 응답을 반환했습니다.';
+    throw new Error(`${hint} (HTTP ${response.status})`);
+  }
+  return response.json();
+}
 function reloadPreservingView(){
+  const activeTab=document.querySelector('.tab-button.active')?.dataset.tab||'current-panel';
+  sessionStorage.setItem('titan-active-tab',activeTab);
   sessionStorage.setItem('titan-scroll-y',String(window.scrollY));
+  const url=new URL(location.href);
+  url.searchParams.set('tab',activeTab);
+  if(activeTab!=='history-panel'){
+    url.searchParams.delete('year');
+    url.searchParams.delete('month');
+    url.searchParams.delete('holding');
+  }
+  history.replaceState(null,'',url.pathname+url.search);
   location.reload();
 }
 const savedScrollY=Number(sessionStorage.getItem('titan-scroll-y')||0);
@@ -106,25 +275,45 @@ function activateTab(tabId){
 document.querySelectorAll('.tab-button').forEach(button=>button.addEventListener('click',()=>{
   sessionStorage.setItem('titan-active-tab',button.dataset.tab);
   activateTab(button.dataset.tab);
+  const url=new URL(location.href);
+  url.searchParams.set('tab',button.dataset.tab);
+  if(button.dataset.tab!=='history-panel'){
+    url.searchParams.delete('year');
+    url.searchParams.delete('month');
+    url.searchParams.delete('holding');
+  }
+  history.replaceState(null,'',url.pathname+url.search);
 }));
 const dateInput=document.querySelector('#test-date');
 const runButton=document.querySelector('#run-test');
 const yearInput=document.querySelector('#test-year');
 const yearButton=document.querySelector('#run-year');
 const runMessage=document.querySelector('#run-message');
-dateInput.value=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+function latestKisTestDate(){
+  const value=new Date();
+  if(value.getHours()<15||(value.getHours()===15&&value.getMinutes()<40)){
+    value.setDate(value.getDate()-1);
+  }
+  while(value.getDay()===0||value.getDay()===6)value.setDate(value.getDate()-1);
+  return new Date(value.getTime()-value.getTimezoneOffset()*60000).toISOString().slice(0,10);
+}
+dateInput.value=latestKisTestDate();
 yearInput.value=dateInput.value.slice(0,4);
 const historyYear=document.querySelector('#history-year');
 const historyMonth=document.querySelector('#history-month');
 const historyHolding=document.querySelector('#history-holding');
 const historyCohort=document.querySelector('#history-cohort');
 const historyStrategy=document.querySelector('#history-strategy');
+historyStrategy.insertAdjacentHTML('beforeend','<option value="V1.3-S79-N2-TP5-SL10-CANDIDATE">V1.3 상승·횡보 79점·최대2 후보</option>');
+historyStrategy.insertAdjacentHTML('beforeend','<option value="V1.3-DUAL-5D-S80-N7-TP5-SL10-CANDIDATE">V1.3 20일+5일 시장 후보</option>');
+const historyProfitTarget=document.querySelector('#history-profit-target');
+const historyStopLoss=document.querySelector('#history-stop-loss');
+const historyEntryMode=document.querySelector('#history-entry-mode');
+const historyEntryMinimum=document.querySelector('#history-entry-minimum');
+const historyEntryLimit=document.querySelector('#history-entry-limit');
 const historyMonthButton=document.querySelector('#history-month-run');
 const historyButton=document.querySelector('#history-run');
 const historyMessage=document.querySelector('#history-message');
-const patternEndMonth=document.querySelector('#pattern-end-month');
-const patternButton=document.querySelector('#pattern-run');
-const patternMessage=document.querySelector('#pattern-message');
 const momentumExitEnd=document.querySelector('#momentum-exit-end');
 const momentumExitButton=document.querySelector('#momentum-exit-run');
 const momentumExitMessage=document.querySelector('#momentum-exit-message');
@@ -134,20 +323,69 @@ historyMonth.value=pageParams.get('month')||sessionStorage.getItem('titan-histor
 historyHolding.value=pageParams.get('holding')||sessionStorage.getItem('titan-history-holding')||'1';
 historyCohort.value=sessionStorage.getItem('titan-history-cohort')||'COMPARE';
 historyStrategy.value=sessionStorage.getItem('titan-history-strategy')||'V1.1';
+historyProfitTarget.value=sessionStorage.getItem('titan-history-profit-target')||'';
+historyStopLoss.value=sessionStorage.getItem('titan-history-stop-loss')||'';
+historyEntryMode.value=sessionStorage.getItem('titan-history-entry-mode')||'OPEN';
+historyEntryMinimum.value=sessionStorage.getItem('titan-history-entry-minimum')||'';
+historyEntryLimit.value=sessionStorage.getItem('titan-history-entry-limit')||'3';
+const requestedHistoricalPeriod=pageParams.get('month')||pageParams.get('year');
+if(requestedHistoricalPeriod){
+  sessionStorage.setItem('titan-history-result-period',requestedHistoricalPeriod);
+}
+function currentHistoricalPeriod(){
+  return sessionStorage.getItem('titan-history-result-period')||historyMonth.value||historyYear.value;
+}
 historyYear.addEventListener('change',()=>sessionStorage.setItem('titan-history-year',historyYear.value));
 historyMonth.addEventListener('change',()=>sessionStorage.setItem('titan-history-month',historyMonth.value));
 historyHolding.addEventListener('change',()=>{
   sessionStorage.setItem('titan-history-holding',historyHolding.value);
-  renderHistoricalPeriod(pageParams.get('month')||historyYear.value);
+  renderHistoricalPeriod(currentHistoricalPeriod());
 });
 historyCohort.addEventListener('change',()=>{
   sessionStorage.setItem('titan-history-cohort',historyCohort.value);
-  renderHistoricalPeriod(pageParams.get('month')||historyYear.value);
+  renderHistoricalPeriod(currentHistoricalPeriod());
 });
 historyStrategy.addEventListener('change',()=>{
   sessionStorage.setItem('titan-history-strategy',historyStrategy.value);
-  if(historyStrategy.value!=='V1.1')historyHolding.value='5';
-  renderHistoricalPeriod(pageParams.get('month')||historyYear.value);
+  if(historyStrategy.value.includes('TP5')){
+    historyHolding.value='20';
+    historyProfitTarget.value='5';
+    historyStopLoss.value='10';
+  }else{
+    if(historyStrategy.value!=='V1.1')historyHolding.value='5';
+    historyProfitTarget.value='';
+    historyStopLoss.value='';
+  }
+  if(['V1.3-S80-N7-TP5-SL10-CANDIDATE','V1.3-S79-N2-TP5-SL10-CANDIDATE','V1.3-DUAL-5D-S80-N7-TP5-SL10-CANDIDATE'].includes(historyStrategy.value)){
+    historyEntryMode.value='KIS_1000_LIMIT';
+    historyEntryMinimum.value='-3';
+    historyEntryLimit.value='3';
+  }
+  sessionStorage.setItem('titan-history-holding',historyHolding.value);
+  sessionStorage.setItem('titan-history-profit-target',historyProfitTarget.value);
+  sessionStorage.setItem('titan-history-stop-loss',historyStopLoss.value);
+  sessionStorage.setItem('titan-history-entry-mode',historyEntryMode.value);
+  sessionStorage.setItem('titan-history-entry-minimum',historyEntryMinimum.value);
+  sessionStorage.setItem('titan-history-entry-limit',historyEntryLimit.value);
+  sessionStorage.setItem('titan-history-cohort',historyCohort.value);
+  renderHistoricalPeriod(currentHistoricalPeriod());
+});
+[historyProfitTarget,historyStopLoss].forEach(input=>input.addEventListener('change',()=>{
+  sessionStorage.setItem('titan-history-profit-target',historyProfitTarget.value);
+  sessionStorage.setItem('titan-history-stop-loss',historyStopLoss.value);
+  renderHistoricalPeriod(currentHistoricalPeriod());
+}));
+historyEntryMode.addEventListener('change',()=>{
+  sessionStorage.setItem('titan-history-entry-mode',historyEntryMode.value);
+  renderHistoricalPeriod(currentHistoricalPeriod());
+});
+historyEntryMinimum.addEventListener('change',()=>{
+  sessionStorage.setItem('titan-history-entry-minimum',historyEntryMinimum.value);
+  renderHistoricalPeriod(currentHistoricalPeriod());
+});
+historyEntryLimit.addEventListener('change',()=>{
+  sessionStorage.setItem('titan-history-entry-limit',historyEntryLimit.value);
+  renderHistoricalPeriod(currentHistoricalPeriod());
 });
 const savedTab=pageParams.get('tab')||sessionStorage.getItem('titan-active-tab');
 if(savedTab){
@@ -155,32 +393,17 @@ if(savedTab){
   if(savedButton)savedButton.click();
 }
 if(location.protocol==='file:'){
+  dataUpdateButton.disabled=true;
+  operationalSelectionButton.disabled=true;
+  breakoutButton.disabled=true;
+  breakoutMonthButton.disabled=true;
   runButton.disabled=true;
   yearButton.disabled=true;
   historyButton.disabled=true;
   historyMonthButton.disabled=true;
-  patternButton.disabled=true;
   momentumExitButton.disabled=true;
   runMessage.textContent='테스트 버튼을 사용하려면 python -m tools.kis_dashboard_server 로 대시보드를 실행하세요.';
 }
-patternEndMonth.value=sessionStorage.getItem('titan-pattern-end-month')||'2026-07';
-patternEndMonth.addEventListener('change',()=>sessionStorage.setItem('titan-pattern-end-month',patternEndMonth.value));
-patternButton.addEventListener('click',async()=>{
-  if(!patternEndMonth.value)return;
-  sessionStorage.setItem('titan-pattern-end-month',patternEndMonth.value);
-  sessionStorage.setItem('titan-active-tab','pattern-panel');
-  patternButton.disabled=true; patternMessage.className='run-message'; patternMessage.textContent='과거 월별 표본을 생성하고 Walk-forward 검증 중입니다.';
-  try{
-    const response=await fetch('/api/run-sector-laggard',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-    const result=await response.json();
-    if(!response.ok)throw new Error(result.message||'패턴 테스트에 실패했습니다.');
-    patternMessage.className='run-message good'; patternMessage.textContent=`${result.samples}개 표본, ${result.folds}개월 검증이 완료되었습니다.`;
-    setTimeout(reloadPreservingView,700);
-  }catch(error){
-    patternMessage.className='run-message error'; patternMessage.textContent=error.message;
-    patternButton.disabled=false;
-  }
-});
 momentumExitEnd.value=sessionStorage.getItem('titan-momentum-exit-end')||'2026-06';
 momentumExitEnd.addEventListener('change',()=>sessionStorage.setItem('titan-momentum-exit-end',momentumExitEnd.value));
 momentumExitButton.addEventListener('click',async()=>{
@@ -189,8 +412,8 @@ momentumExitButton.addEventListener('click',async()=>{
   sessionStorage.setItem('titan-active-tab','pattern-panel');
   momentumExitButton.disabled=true; momentumExitMessage.className='run-message'; momentumExitMessage.textContent='월간 상승주와 V1.3 교집합의 5거래일 성과를 계산 중입니다.';
   try{
-    const response=await fetch('/api/run-sector-laggard',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-    const result=await response.json();
+    throw new Error('이 연구 루틴은 현재 대시보드 실행 대상이 아닙니다.');
+    const result=await jsonResponse(response);
     if(!response.ok)throw new Error(result.message||'5거래일 매도 테스트에 실패했습니다.');
     momentumExitMessage.className='run-message good'; momentumExitMessage.textContent=`전체 ${result.all_trades}건, V1.3 통과 ${result.v1_3_trades}건 검증이 완료되었습니다.`;
     setTimeout(reloadPreservingView,700);
@@ -201,12 +424,12 @@ momentumExitButton.addEventListener('click',async()=>{
 });
 runButton.addEventListener('click',async()=>{
   if(!dateInput.value)return;
-  runButton.disabled=true; runMessage.className='run-message'; runMessage.textContent='테스트 실행 중입니다. 창을 닫지 마세요.';
+  runButton.disabled=true; runMessage.className='run-message'; runMessage.textContent=dateInput.value<new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10)?'저장된 로컬 KRX 데이터로 테스트 중입니다.':'KIS에서 당일 데이터를 조회 중입니다. 창을 닫지 마세요.';
   try{
     const response=await fetch('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:dateInput.value})});
-    const result=await response.json();
+    const result=await jsonResponse(response);
     if(!response.ok)throw new Error(result.message||'실행에 실패했습니다.');
-    runMessage.className='run-message good'; runMessage.textContent='완료되었습니다. 결과를 새로 불러옵니다.';
+    runMessage.className='run-message good'; runMessage.textContent=`${result.message}. 결과를 새로 불러옵니다.`;
     setTimeout(reloadPreservingView,700);
   }catch(error){
     runMessage.className='run-message error'; runMessage.textContent=error.message;
@@ -222,9 +445,10 @@ historyButton.addEventListener('click',async()=>{
   history.replaceState(null,'',`/?tab=history-panel&year=${encodeURIComponent(historyYear.value)}&holding=${historyHolding.value}`);
   historyButton.disabled=true; historyMessage.className='run-message'; historyMessage.textContent='과거 연간 테스트 중입니다.';
   try{
-    const response=await fetch('/api/run-year',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({year:historyYear.value,holding_sessions:Number(historyHolding.value),strategy_version:historyStrategy.value})});
+    const response=await fetch('/api/run-year',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({year:historyYear.value,holding_sessions:Number(historyHolding.value),strategy_version:historyStrategy.value,profit_target:historyProfitTarget.value||null,stop_loss:historyStopLoss.value||null,entry_mode:historyEntryMode.value,entry_minimum:historyEntryMinimum.value||null,entry_limit:historyEntryLimit.value})});
     const result=await response.json();
     if(!response.ok)throw new Error(result.message||'연간 테스트에 실패했습니다.');
+    sessionStorage.setItem('titan-history-result-period',historyYear.value);
     historyMessage.className='run-message good'; historyMessage.textContent=`${result.trading_days}거래일 테스트가 완료되었습니다.`;
     setTimeout(reloadPreservingView,700);
   }catch(error){
@@ -241,9 +465,10 @@ historyMonthButton.addEventListener('click',async()=>{
   history.replaceState(null,'',`/?tab=history-panel&month=${encodeURIComponent(historyMonth.value)}&holding=${historyHolding.value}`);
   historyMonthButton.disabled=true; historyButton.disabled=true; historyMessage.className='run-message'; historyMessage.textContent='과거 월간 테스트 중입니다.';
   try{
-    const response=await fetch('/api/run-month',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({month:historyMonth.value,holding_sessions:Number(historyHolding.value),strategy_version:historyStrategy.value})});
+    const response=await fetch('/api/run-month',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({month:historyMonth.value,holding_sessions:Number(historyHolding.value),strategy_version:historyStrategy.value,profit_target:historyProfitTarget.value||null,stop_loss:historyStopLoss.value||null,entry_mode:historyEntryMode.value,entry_minimum:historyEntryMinimum.value||null,entry_limit:historyEntryLimit.value})});
     const result=await response.json();
     if(!response.ok)throw new Error(result.message||'월간 테스트에 실패했습니다.');
+    sessionStorage.setItem('titan-history-result-period',historyMonth.value);
     historyMessage.className='run-message good'; historyMessage.textContent=`${result.trading_days}거래일 테스트가 완료되었습니다.`;
     setTimeout(reloadPreservingView,700);
   }catch(error){
@@ -255,8 +480,45 @@ const H=D.historical||{trades:[],total:0,wins:0};
 function renderHistoricalPeriod(period){
   const holding=Number(historyHolding.value);
   const strategy=historyStrategy.value;
-  const periodTrades=(H.trades||[]).filter(x=>x.selection_date.startsWith(period)&&Number(x.holding_sessions||1)===holding&&(x.strategy_version||'V1.1')===strategy);
+  const entryMode=historyEntryMode.value;
+  const entryMinimum=historyEntryMinimum.value===''?null:Number(historyEntryMinimum.value)/100;
+  const entryLimit=Number(historyEntryLimit.value)/100;
+  const requestedTarget=historyProfitTarget.value===''?null:Number(historyProfitTarget.value)/100;
+  const requestedStop=historyStopLoss.value===''?null:Number(historyStopLoss.value)/100;
+  const targetExit=requestedTarget!==null||strategy.includes('TP5');
+  const ratesMatch=x=>{
+    if(requestedTarget!==null)return Math.abs(Number(x.profit_target)-requestedTarget)<1e-9&&Math.abs(Number(x.stop_loss)-requestedStop)<1e-9;
+    if(strategy.includes('TP5'))return x.profit_target==null||(Math.abs(Number(x.profit_target)-.05)<1e-9&&Math.abs(Number(x.stop_loss)-.10)<1e-9);
+    return x.profit_target==null;
+  };
+  const entryMatch=x=>(x.entry_mode||'OPEN')===entryMode&&(entryMode==='OPEN'||(Math.abs(Number(x.entry_limit)-entryLimit)<1e-9&&(entryMinimum===null?x.entry_minimum==null:Math.abs(Number(x.entry_minimum)-entryMinimum)<1e-9)));
   const cohortOf=x=>x.cohort||'SELECTED';
+  const matchingTrades=(H.trades||[]).filter(x=>x.selection_date.startsWith(period)&&(targetExit?Number(x.evaluation_horizon||20)===holding:Number(x.holding_sessions||1)===holding)&&(x.strategy_version||'V1.1')===strategy&&ratesMatch(x)&&entryMatch(x));
+  const tradeByIdentity=new Map();
+  matchingTrades.forEach(x=>{
+    const key=`${cohortOf(x)}|${x.selection_date}|${x.code}`;
+    const previous=tradeByIdentity.get(key);
+    if(!previous||String(x._executed_at||'')>=String(previous._executed_at||''))tradeByIdentity.set(key,x);
+  });
+  const periodTrades=[...tradeByIdentity.values()];
+  const tradeByCandidate=new Map(periodTrades.map(x=>[`${cohortOf(x)}|${x.selection_date}|${x.code}`,x]));
+  const matchingRuns=(D.runs||[]).filter(x=>x.as_of&&x.as_of.startsWith(period)&&(x.strategy_version||'V1.1')===strategy&&Number(x.holding_sessions||1)===holding&&ratesMatch(x)&&entryMatch(x)&&String(x.run_id||'').startsWith('LOCAL_'));
+  const runByDate=new Map();
+  matchingRuns.forEach(run=>{
+    const key=run.as_of.slice(0,10);
+    const previous=runByDate.get(key);
+    if(!previous||String(run.executed_at||'')>String(previous.executed_at||''))runByDate.set(key,run);
+  });
+  const canonicalRuns=[...runByDate.values()].sort((a,b)=>a.as_of.localeCompare(b.as_of));
+  const candidateRows=canonicalRuns.flatMap(run=>[
+    ...(run.selected_candidates||[]).map(x=>({...x,cohort:'SELECTED',selection_date:run.as_of.slice(0,10)})),
+    ...(run.observation_candidates||[]).map(x=>({...x,cohort:'OBSERVATION',selection_date:run.as_of.slice(0,10)})),
+  ]).filter(x=>historyCohort.value==='COMPARE'||x.cohort===historyCohort.value);
+  const selectedCount=candidateRows.filter(x=>x.cohort==='SELECTED').length;
+  const observationCount=candidateRows.filter(x=>x.cohort==='OBSERVATION').length;
+  const completedCount=candidateRows.filter(x=>tradeByCandidate.has(`${x.cohort}|${x.selection_date}|${x.code}`)).length;
+  document.querySelector('#history-candidate-note').textContent=`${period} · ${canonicalRuns.length}거래일 · 매수 선정 ${selectedCount}건 · 관찰 ${observationCount}건 · 거래 완료 ${completedCount}건`;
+  document.querySelector('#history-candidates').innerHTML=candidateRows.length?'<table><thead><tr><th>선정일</th><th>구분</th><th>종목</th><th>점수</th><th>매수일</th><th>매수가</th><th>매도일</th><th>매도가</th><th>보유</th><th>순수익률</th><th>상태</th><th>최신 종가 (매도가 대비)</th></tr></thead><tbody>'+candidateRows.slice().reverse().map(x=>{const t=tradeByCandidate.get(`${x.cohort}|${x.selection_date}|${x.code}`);const p=(D.latest_prices||{})[x.code];const sinceExit=t&&p&&Number(t.sell_price)?Number(p.close)/Number(t.sell_price)-1:null;const latestLabel=p?`${Number(p.close).toLocaleString()}${sinceExit==null?'':` (${sinceExit>=0?'+':''}${(sinceExit*100).toFixed(1)}%)`}`:'—';return `<tr><td>${x.selection_date}</td><td>${x.cohort==='SELECTED'?'매수 선정':'관찰'}</td><td>${x.name} (${x.code})</td><td><strong>${x.total_score}</strong></td><td>${t?(t.buy_date||t.trade_date):'—'}</td><td>${t?Number(t.buy_price).toLocaleString():'—'}</td><td>${t?(t.sell_date||t.trade_date):'—'}</td><td>${t?Number(t.sell_price).toLocaleString():'—'}</td><td>${t?`${t.holding_sessions||holding}일`:'—'}</td><td class="${t?(t.win?'good':'bad'):''}">${t?pct(t.net_return):'—'}</td><td class="${t?(t.win?'good':'bad'):'watch'}">${t?(t.win?'수익':'손실'):'미체결'}</td><td class="${sinceExit==null?'':(sinceExit>=0?'good':'bad')}"><strong>${latestLabel}</strong></td></tr>`}).join('')+'</tbody></table>':`<div class="empty">${period}에는 해당 조건의 선정·관찰 후보가 없습니다.</div>`;
   const trades=historyCohort.value==='COMPARE'?periodTrades:periodTrades.filter(x=>cohortOf(x)===historyCohort.value);
   const wins=trades.filter(x=>x.win).length;
   const average=trades.length?trades.reduce((sum,x)=>sum+x.net_return,0)/trades.length:null;
@@ -264,7 +526,10 @@ function renderHistoricalPeriod(period){
   document.querySelector('#trade-wins').textContent=wins;
   document.querySelector('#trade-win-rate').textContent=pct(trades.length?wins/trades.length:null);
   document.querySelector('#trade-average').textContent=pct(average);
-  const cohorts=['SELECTED','OBSERVATION'].map(cohort=>{
+  const visibleCohorts=historyCohort.value==='COMPARE'
+    ?['SELECTED','OBSERVATION']
+    :[historyCohort.value];
+  const cohorts=visibleCohorts.map(cohort=>{
     const members=periodTrades.filter(x=>cohortOf(x)===cohort);
     const memberWins=members.filter(x=>x.win).length;
     const memberAverage=members.length?members.reduce((sum,x)=>sum+x.net_return,0)/members.length:null;
@@ -273,9 +538,9 @@ function renderHistoricalPeriod(period){
   document.querySelector('#cohort-comparison').innerHTML='<table><thead><tr><th>그룹</th><th>거래</th><th>승리</th><th>승률</th><th>평균 순수익률</th></tr></thead><tbody>'+cohorts+'</tbody></table>';
   document.querySelector('#trade-history').innerHTML=trades.length?'<table><thead><tr><th>그룹</th><th>선정일</th><th>매수일</th><th>매도일</th><th>보유</th><th>종목</th><th>점수</th><th>매수가</th><th>매도가</th><th>순수익률</th><th>결과</th></tr></thead><tbody>'+trades.slice().reverse().map(x=>`<tr><td>${cohortOf(x)==='SELECTED'?'선정':'후보'}</td><td>${x.selection_date}</td><td>${x.buy_date||x.trade_date}</td><td>${x.sell_date||x.trade_date}</td><td>${x.holding_sessions||1}일</td><td>${x.name} (${x.code})</td><td>${x.score}</td><td>${Number(x.buy_price).toLocaleString()}</td><td>${Number(x.sell_price).toLocaleString()}</td><td class="${x.win?'good':'bad'}">${pct(x.net_return)}</td><td class="${x.win?'good':'bad'}">${x.win?'승':'패'}</td></tr>`).join('')+'</tbody></table>':`<div class="empty">${period}에는 ${holding}거래일 보유로 완료된 거래가 없습니다.</div>`;
 }
-historyYear.addEventListener('change',()=>renderHistoricalPeriod(historyYear.value));
-historyMonth.addEventListener('change',()=>renderHistoricalPeriod(historyMonth.value));
-renderHistoricalPeriod(pageParams.get('month')||historyYear.value);
+historyYear.addEventListener('change',()=>{sessionStorage.setItem('titan-history-result-period',historyYear.value);renderHistoricalPeriod(historyYear.value)});
+historyMonth.addEventListener('change',()=>{sessionStorage.setItem('titan-history-result-period',historyMonth.value);renderHistoricalPeriod(historyMonth.value)});
+renderHistoricalPeriod(currentHistoricalPeriod());
 function renderPattern(){
   const P=null;
   if(!P){
@@ -320,22 +585,63 @@ function renderMomentumExit(){
 }
 renderMomentumExit();
 function renderSector(){
-  const S=D.sector_laggard;
+  const S=D.industry_rs;
   if(!S){
     document.querySelector('#sector-summary').innerHTML='<div class="empty">아직 실행 결과가 없습니다.</div>';
+    document.querySelector('#sector-buckets').innerHTML='<div class="empty">구간별 결과가 없습니다.</div>';
     document.querySelector('#sector-groups').innerHTML='<div class="empty">업종별 결과가 없습니다.</div>';
     document.querySelector('#sector-candidates').innerHTML='<div class="empty">최근 후보가 없습니다.</div>';
     return;
   }
-  const names={RAW:'전체 후발주',CONFIRMED:'신호일 상승·거래량 확인'};
-  document.querySelector('#sector-summary').innerHTML='<table><thead><tr><th>구분</th><th>거래</th><th>승률</th><th>평균 순수익</th><th>중앙값</th><th>복리 합계</th></tr></thead><tbody>'+Object.entries(S.summaries).map(([k,x])=>`<tr><td>${names[k]||k}</td><td>${x.trades}</td><td>${pct(x.win_rate)}</td><td class="${(x.average_net_return||0)>0?'good':'bad'}">${pct(x.average_net_return)}</td><td>${pct(x.median_net_return)}</td><td>${pct(x.total_compound_return)}</td></tr>`).join('')+'</tbody></table>';
-  const c=S.summaries.CONFIRMED;
-  document.querySelector('#sector-verdict').textContent=c.trades<30?'확인 신호 표본이 30건 미만입니다. 전략 판단보다 표본 확대가 먼저입니다.':(c.average_net_return>0?'확인 조건의 평균 순수익이 양수입니다. 기간·업종을 넓힌 외부 검증이 필요합니다.':'현재 확인 조건에서는 거래비용 후 평균 우위가 확인되지 않았습니다.');
-  document.querySelector('#sector-groups').innerHTML='<table><thead><tr><th>업종</th><th>거래</th><th>승률</th><th>평균 순수익</th></tr></thead><tbody>'+Object.entries(S.group_summaries).map(([k,x])=>`<tr><td>${k}</td><td>${x.trades}</td><td>${pct(x.win_rate)}</td><td>${pct(x.average_net_return)}</td></tr>`).join('')+'</tbody></table>';
-  const rows=(S.latest_candidates||[]).filter(x=>x.group_return>=.03&&x.lag_gap>=.03&&x.stock_return>=-.03);
-  document.querySelector('#sector-candidates').innerHTML=rows.length?'<table><thead><tr><th>신호일</th><th>업종</th><th>종목</th><th>업종 5일</th><th>종목 5일</th><th>격차</th><th>거래량</th><th>확인</th></tr></thead><tbody>'+rows.map(x=>`<tr><td>${x.signal_date}</td><td>${x.group}</td><td>${x.name} (${x.code})</td><td>${pct(x.group_return)}</td><td>${pct(x.stock_return)}</td><td>${pct(x.lag_gap)}</td><td>${Number(x.volume_ratio).toFixed(2)}배</td><td>${x.confirmed?'예':'아니오'}</td></tr>`).join('')+'</tbody></table>':'<div class="empty">마지막 검증일에는 조건을 만족한 후보가 없습니다.</div>';
+  const horizons=Object.entries(S.horizon_summaries);
+  document.querySelector('#sector-summary').innerHTML='<table><thead><tr><th>이후 기간</th><th>상위-하위 수익률 차이</th><th>구간 단조성</th></tr></thead><tbody>'+horizons.map(([k,x])=>`<tr><td>${k}거래일</td><td class="${(x.top_bottom_spread||0)>0?'good':'bad'}">${pct(x.top_bottom_spread)}</td><td>${x.monotonic?'확인':'미확인'}</td></tr>`).join('')+'</tbody></table>';
+  const h20=S.horizon_summaries['20'];
+  document.querySelector('#sector-verdict').textContent=S.observation_count<100?'표본이 100건 미만입니다. 기간 또는 업종 확대가 필요합니다.':((h20.top_bottom_spread||0)>0?'20거래일 기준 RS 상위 20%가 하위 20%보다 우세합니다. 다른 기간에서도 일관되는지 함께 확인하세요.':'20거래일 기준 상·하위 구간의 선별 우위가 확인되지 않았습니다.');
+  document.querySelector('#sector-buckets').innerHTML='<table><thead><tr><th>RS 점수</th><th>5일 평균</th><th>20일 평균</th><th>60일 평균</th><th>20일 표본</th><th>20일 승률</th></tr></thead><tbody>'+h20.buckets.map((x,i)=>`<tr><td>${x.label}</td><td>${pct(S.horizon_summaries['5'].buckets[i].average_return)}</td><td>${pct(x.average_return)}</td><td>${pct(S.horizon_summaries['60'].buckets[i].average_return)}</td><td>${x.count}</td><td>${pct(x.win_rate)}</td></tr>`).join('')+'</tbody></table>';
+  document.querySelector('#sector-groups').innerHTML='<table><thead><tr><th>업종</th><th>관측치</th><th>RS 상위 20% 표본</th><th>상위 20% 이후 20일</th></tr></thead><tbody>'+Object.entries(S.group_summaries).map(([k,x])=>`<tr><td>${k}</td><td>${x.observations}</td><td>${x.top_20_count}</td><td>${pct(x.top_20_average_20d)}</td></tr>`).join('')+'</tbody></table>';
+  const rows=S.latest_candidates||[];
+  document.querySelector('#sector-candidates').innerHTML=rows.length?`<div class="sub">기준일 ${S.latest_signal_date} · 점수는 전체 분석 종목 percentile입니다.</div><table><thead><tr><th>RS 점수</th><th>업종 순위</th><th>업종</th><th>종목</th><th>상대강도</th><th>종목 모멘텀</th><th>업종 모멘텀</th></tr></thead><tbody>`+rows.map(x=>`<tr><td><strong>${Number(x.rs_score).toFixed(1)}</strong></td><td>${x.industry_rank}/${x.industry_size}</td><td>${x.group}</td><td>${x.name} (${x.code})</td><td class="${x.relative_strength>0?'good':'bad'}">${pct(x.relative_strength)}</td><td>${pct(x.stock_momentum)}</td><td>${pct(x.industry_momentum)}</td></tr>`).join('')+'</tbody></table>':'<div class="empty">표시할 RS 후보가 없습니다.</div>';
 }
 renderSector();
+const regimeNames={STRONG_UP:'강한 상승',STRONG_BULL:'강한 상승',UP:'완만한 상승',BULL:'일반 강세',SIDEWAYS:'혼조·횡보',DOWN:'하락',BEAR:'약세'};
+function renderPreBreakout(){
+  const P=D.pre_breakout;
+  if(!P){
+    document.querySelector('#breakout-candidates').innerHTML='<div class="empty">아직 검색 결과가 없습니다.</div>';
+    document.querySelector('#breakout-note').textContent='기준일을 선택하고 검색을 실행하세요.';
+    return;
+  }
+  document.querySelector('#breakout-analyzed').textContent=Number(P.analyzed_count).toLocaleString();
+  document.querySelector('#breakout-breadth').textContent=pct(P.market_breadth);
+  document.querySelector('#breakout-qualified').textContent=P.qualified_count;
+  document.querySelector('#breakout-samples').textContent=P.validation.sample_count;
+  document.querySelector('#breakout-hit-rate').textContent=pct(P.validation.hit_rate);
+  const rr=P.market_regime_rule||{};
+  document.querySelector('#breakout-note').textContent=`${P.as_of} 기준 · 시장 ${regimeNames[P.market_regime]||P.market_regime} · MA20 확산도 ${pct(P.market_breadth)} · MA60 확산도 ${pct(P.market_breadth_60d)} · 최소 ${rr.minimum_score||'—'}점 · 최대 ${rr.limit??'—'}종목 · 목표 ${pct(rr.target)} · 조건 충족 ${P.qualified_count}종목`;
+  const rows=P.candidates||[];
+  document.querySelector('#breakout-candidates').innerHTML=rows.length?'<table><thead><tr><th>상태</th><th>등급</th><th>정밀형</th><th>점수</th><th>종목</th><th>충족</th><th>5일 수익</th><th>120일 고점</th><th>250일 고점</th><th>거래대금</th><th>갭</th><th>윗꼬리</th><th>20일 낙폭</th><th>업종 RS</th><th>업종 강도</th><th>향후 최대</th><th>최대낙폭</th><th>+15%</th></tr></thead><tbody>'+rows.map(x=>`<tr><td class="${x.qualified?'good':'watch'}">${x.qualified?'조건 충족':'근접'}</td><td>${x.grade||'WATCH'}</td><td>${x.precision_qualified?'통과':'—'}</td><td><strong>${Number(x.pre_breakout_score).toFixed(1)}</strong></td><td>${x.name} (${x.code})</td><td>${x.conditions_passed}/${x.conditions_total}</td><td>${pct(x.return_5d)}</td><td>${pct(x.distance_to_120d_high)}</td><td>${pct(x.distance_to_250d_high)}</td><td>${x.turnover_to_20d==null?'—':Number(x.turnover_to_20d).toFixed(2)+'배'}</td><td>${pct(x.gap_return)}</td><td>${pct(x.upper_wick_ratio)}</td><td>${pct(x.drawdown_20d)}</td><td>${x.industry_rs_score==null?'—':Number(x.industry_rs_score).toFixed(1)}</td><td>${x.industry_momentum_score==null?'—':Number(x.industry_momentum_score).toFixed(1)}</td><td>${pct(x.future_max_return)}</td><td>${pct(x.future_max_drawdown)}</td><td>${x.surge_hit==null?'—':(x.surge_hit?'적중':'미달')}</td></tr>`).join('')+'</tbody></table>':'<div class="empty">분석 가능한 후보가 없습니다.</div>';
+}
+renderPreBreakout();
+function renderPreBreakoutMonth(){
+  const M=D.pre_breakout_monthly;
+  if(!M){
+    document.querySelector('#breakout-trades-table').innerHTML='<div class="empty">아직 월간 검증 결과가 없습니다.</div>';
+    document.querySelector('#breakout-month-note').textContent='대상 월을 선택하고 검증을 실행하세요.';
+    return;
+  }
+  const S=M.summary;
+  const reasons={PROFIT_TARGET:'국면 목표가',STOP_LOSS:'ATR 손절',MA20_BREAK:'MA20 이탈',MAX_HOLD:'20일 만기'};
+  document.querySelector('#breakout-trades').textContent=S.trades;
+  document.querySelector('#breakout-win-rate').textContent=pct(S.win_rate);
+  document.querySelector('#breakout-average').textContent=pct(S.average_net_return);
+  document.querySelector('#breakout-holding').textContent=S.average_holding_sessions==null?'—':Number(S.average_holding_sessions).toFixed(1)+'일';
+  const grades=S.grades||{};
+  const gradeText=Object.entries(grades).map(([k,v])=>`${k}급 ${v.trades}건·승률 ${pct(v.win_rate)}`).join(' · ');
+  document.querySelector('#breakout-month-note').textContent=`${M.month} · 조건 신호 ${M.qualified_signals}건 · ${gradeText} · 돌파 확인 제외 ${M.confirmation_excluded||0}건 · 갭 제외 ${M.gap_excluded}건 · 중복 제외 ${M.duplicate_excluded}건 · ${Object.entries(S.exit_reasons).map(([k,v])=>`${reasons[k]} ${v}건`).join(' · ')}`;
+  const rows=M.trades||[];
+  document.querySelector('#breakout-trades-table').innerHTML=rows.length?'<table><thead><tr><th>신호일</th><th>시장</th><th>종목</th><th>등급</th><th>점수</th><th>목표</th><th>매수일</th><th>매수가</th><th>매도일</th><th>매도가</th><th>보유</th><th>매도 이유</th><th>순수익률</th><th>결과</th></tr></thead><tbody>'+rows.slice().reverse().map(x=>`<tr><td>${x.signal_date}</td><td>${regimeNames[x.market_regime]||x.market_regime||'—'}</td><td>${x.name} (${x.code})</td><td>${x.grade||'—'}</td><td>${Number(x.score).toFixed(1)}</td><td>${pct(x.profit_target_rate)}</td><td>${x.entry_date}</td><td>${Number(x.entry_price).toLocaleString()}</td><td>${x.exit_date}</td><td>${Number(x.exit_price).toLocaleString()}</td><td>${x.holding_sessions}일</td><td>${reasons[x.exit_reason]||x.exit_reason}</td><td class="${x.win?'good':'bad'}">${pct(x.net_return)}</td><td class="${x.win?'good':'bad'}">${x.win?'수익':'손실'}</td></tr>`).join('')+'</tbody></table>':'<div class="empty">완료된 거래가 없습니다.</div>';
+}
+renderPreBreakoutMonth();
 yearButton.addEventListener('click',async()=>{
   if(!yearInput.value)return;
   yearButton.disabled=true; runButton.disabled=true; runMessage.className='run-message'; runMessage.textContent='로컬 데이터로 연간 테스트 중입니다.';
@@ -356,10 +662,159 @@ document.querySelector('#status').textContent=D.readiness.status;
 document.querySelector('#status').classList.toggle('ready',D.readiness.status==='READY');
 document.querySelector('#bar').style.width=Math.min(100,D.readiness.consecutive_passing_days/5*100)+'%';
 document.querySelector('#reason').textContent=(D.readiness.reasons||[]).join(' · ')||'모든 준비 조건을 충족했습니다.';
-const L=D.latest;
-for(const [id,val] of Object.entries({api:L&&pct(L.api_success_rate),retry:L&&pct(L.retry_rate),exclude:L&&pct(L.exclusion_rate),failures:L&&Object.keys(L.fetch_failures||{}).length,orders:L&&L.order_request_count,analyzed:L&&L.analyzed_count}))document.querySelector('#'+id).textContent=val??'—';
-function candidates(items){if(!items||!items.length)return '<div class="empty">해당 종목이 없습니다.</div>';return '<table><thead><tr><th>순위</th><th>코드</th><th>종목명</th><th>총점</th><th>추세</th><th>모멘텀</th><th>거래량</th><th>가격</th><th>위험</th><th>Context</th></tr></thead><tbody>'+items.map(x=>`<tr><td>${x.rank}</td><td>${x.code}</td><td>${x.name}</td><td><strong>${x.total_score}</strong></td><td>${x.trend_score}</td><td>${x.momentum_score}</td><td>${x.volume_score}</td><td>${x.price_action_score}</td><td>${x.risk_score}</td><td>${x.context_score}</td></tr>`).join('')+'</tbody></table>'}
-document.querySelector('#selected').innerHTML=candidates(L&&L.selected_candidates);
-document.querySelector('#observed').innerHTML=candidates(L&&L.observation_candidates);
-document.querySelector('#history').innerHTML=D.runs.length?'<table><thead><tr><th>기준일</th><th>상태</th><th>API</th><th>재시도</th><th>제외율</th><th>분석</th><th>선정</th><th>주문</th></tr></thead><tbody>'+D.runs.slice().reverse().map(x=>`<tr><td>${x.as_of.slice(0,10)}</td><td class="${x.status==='PASS'?'good':'bad'}">${x.status}</td><td>${pct(x.api_success_rate)}</td><td>${pct(x.retry_rate)}</td><td>${pct(x.exclusion_rate)}</td><td>${x.analyzed_count}</td><td>${x.selection_count}</td><td>${x.order_request_count||0}</td></tr>`).join('')+'</tbody></table>':'<div class="empty">아직 공식 실행 기록이 없습니다. 평일 18:30부터 누적됩니다.</div>';
+const operationalRunByDate=new Map();
+(D.operational_runs||[]).forEach(run=>{
+  const key=run.as_of?run.as_of.slice(0,10):run.run_id;
+  const previous=operationalRunByDate.get(key);
+  if(!previous||String(run.executed_at||'')>=String(previous.executed_at||''))operationalRunByDate.set(key,run);
+});
+const operationalRuns=[...operationalRunByDate.values()].sort((a,b)=>String(a.as_of||'').localeCompare(String(b.as_of||'')));
+const operationalViewDate=sessionStorage.getItem('titan-operational-view-date');
+const viewedRuns=operationalViewDate
+  ?operationalRuns.filter(x=>x.as_of&&x.as_of.slice(0,10)===operationalViewDate)
+  :[];
+const L=viewedRuns.length?viewedRuns[viewedRuns.length-1]:D.latest;
+const operationalPrices={...(D.latest_prices||{})};
+const O=D.operational_strategy||{};
+document.querySelector('#operational-label').textContent=O.label||'—';
+document.querySelector('#operational-version').textContent=O.version||'—';
+document.querySelector('#operational-summary').textContent=O.summary||'';
+const todayAction=document.querySelector('#today-action');
+const todayActionDetail=document.querySelector('#today-action-detail');
+if(!L){
+  todayAction.textContent='오늘 선정 작업 미실행';
+  todayAction.className='big watch';
+  todayActionDetail.textContent='실제 S80 일일 실행 결과가 없습니다. 과거 백테스트 결과는 현재 운영 화면에 대신 표시하지 않습니다.';
+}else if(!(L.selected_candidates||[]).length){
+  todayAction.textContent=`${L.as_of.slice(0,10)} 선정 결과 0종목`;
+  todayAction.className='big';
+  todayActionDetail.textContent=`${L.as_of.slice(0,10)} S80 선정 기준을 통과한 종목이 없습니다.`;
+}else if(operationalViewDate&&L.as_of.slice(0,10)===operationalViewDate&&operationalViewDate!==latestKisTestDate()){
+  todayAction.textContent=`${L.as_of.slice(0,10)} 선정 결과 ${L.selected_candidates.length}종목`;
+  todayAction.className='big good';
+  todayActionDetail.textContent=`과거 기준일 조회 결과입니다. 선정 종목은 다음 거래일 10시 매수 검토 대상입니다.`;
+}else{
+  const now=new Date();
+  const beforeTen=now.getHours()<10;
+  todayAction.textContent=beforeTen?'10시 매수 조건 대기':'10시 가격 확인 필요';
+  todayAction.className='big watch';
+  todayActionDetail.textContent=`${L.as_of.slice(0,10)} 선정 ${L.selected_candidates.length}종목 · 전일 종가 대비 ±3% 범위만 수동 승인합니다.`;
+}
+const positionCode=document.querySelector('#position-code');
+const positionName=document.querySelector('#position-name');
+const positionDate=document.querySelector('#position-date');
+const positionPrice=document.querySelector('#position-price');
+const positionQuantity=document.querySelector('#position-quantity');
+const positionButton=document.querySelector('#position-add');
+const positionMessage=document.querySelector('#position-message');
+positionDate.value=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+const safe=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+function storedPositions(){
+  try{return JSON.parse(localStorage.getItem('titan-positions')||'[]')}catch(_){return []}
+}
+function renderPositions(){
+  const rows=storedPositions();
+  document.querySelector('#positions').innerHTML=rows.length?'<table><thead><tr><th>종목</th><th>매수일</th><th>매수가</th><th>수량</th><th>최신 종가</th><th>수익률</th><th>익절가</th><th>손절가</th><th>상태</th><th></th></tr></thead><tbody>'+rows.map((x,index)=>{const p=(D.latest_prices||{})[x.code];const current=p?Number(p.close):null;const rate=current==null?null:current/Number(x.price)-1;const status=rate==null?'가격 없음':rate>=.05?'익절 확인':rate<=-.10?'손절 확인':'보유 유지';const statusClass=rate==null?'watch':rate>=.05?'good':rate<=-.10?'bad':'';return `<tr><td>${safe(x.name)} (${safe(x.code)})</td><td>${safe(x.date)}</td><td>${Number(x.price).toLocaleString()}</td><td>${Number(x.quantity).toLocaleString()}</td><td>${current==null?'—':current.toLocaleString()}</td><td class="${rate==null?'':(rate>=0?'good':'bad')}">${pct(rate)}</td><td>${Math.round(Number(x.price)*1.05).toLocaleString()}</td><td>${Math.round(Number(x.price)*.90).toLocaleString()}</td><td class="${statusClass}">${status}</td><td><button type="button" class="position-delete" data-index="${index}">삭제</button></td></tr>`}).join('')+'</tbody></table>':'<div class="empty">등록된 보유 종목이 없습니다.</div>';
+  document.querySelectorAll('.position-delete').forEach(button=>button.addEventListener('click',()=>{const next=storedPositions();next.splice(Number(button.dataset.index),1);localStorage.setItem('titan-positions',JSON.stringify(next));renderPositions()}));
+}
+positionButton.addEventListener('click',()=>{
+  const code=positionCode.value.trim();
+  const price=Number(positionPrice.value);
+  const quantity=Number(positionQuantity.value);
+  if(!/^\d{6}$/.test(code)||!positionName.value.trim()||!positionDate.value||price<=0||quantity<=0){
+    positionMessage.className='run-message error';
+    positionMessage.textContent='6자리 종목코드, 종목명, 매수일, 매수가, 수량을 모두 입력해 주세요.';
+    return;
+  }
+  const rows=storedPositions();
+  rows.push({code,name:positionName.value.trim(),date:positionDate.value,price,quantity});
+  localStorage.setItem('titan-positions',JSON.stringify(rows));
+  positionMessage.className='run-message good';
+  positionMessage.textContent='보유 종목을 저장했습니다.';
+  positionCode.value='';positionName.value='';positionPrice.value='';positionQuantity.value='';
+  renderPositions();
+});
+renderPositions();
+const latestDate=L&&L.as_of?L.as_of.slice(0,10):null;
+const latestSource=L&&(L.source||(L.request_count>0?'KIS':'LOCAL_KRX'));
+const localSelection=latestSource==='LOCAL_KRX';
+document.querySelector('#api-label').textContent=localSelection?'데이터 출처':'API 성공률';
+document.querySelector('#retry-label').textContent=localSelection?'API 재시도':'재시도율';
+for(const [id,val] of Object.entries({
+  api:L&&(localSelection?'로컬 KRX':pct(L.api_success_rate)),
+  retry:L&&(localSelection?'해당 없음':pct(L.retry_rate)),
+  exclude:L&&pct(L.exclusion_rate),
+  failures:L&&Object.keys(L.fetch_failures||{}).length,
+  orders:L&&L.order_request_count,
+  analyzed:L&&L.analyzed_count
+}))document.querySelector('#'+id).textContent=val??'—';
+const sourceLabel=latestSource==='LOCAL_KRX'?'로컬 KRX':latestSource==='KIS'?'KIS 조회':latestSource||'출처 미상';
+const executedAt=L&&L.executed_at?new Date(L.executed_at).toLocaleString('ko-KR'):'실행 시각 미상';
+document.querySelector('#selected-note').textContent=latestDate?`${latestDate} 기준 · ${sourceLabel} · 실행 ${executedAt} · V1 매수 기준 통과`:'V1 매수 기준을 모두 통과한 후보';
+document.querySelector('#observed-note').textContent=latestDate?`${latestDate} 기준 · ${sourceLabel} · 실행 ${executedAt} · 70–79점 추적군`:'70–79점의 비추천 추적군';
+function candidates(items,asOf){if(!items||!items.length)return '<div class="empty">해당 종목이 없습니다.</div>';return '<table><thead><tr><th>선정 기준일</th><th>순위</th><th>코드</th><th>종목명</th><th>현재가</th><th>조회 기준</th><th>선정일 대비</th><th>총점</th><th>추세</th><th>모멘텀</th><th>거래량</th><th>가격</th><th>위험</th><th>Context</th></tr></thead><tbody>'+items.map(x=>{const p=operationalPrices[x.code];const selectionClose=(D.selection_prices||{})[`${asOf}|${x.code}`];const change=p&&selectionClose!=null?Number(p.close)/Number(selectionClose)-1:null;const changeLabel=change!=null?pct(change):'—';const changeClass=change!=null?(change>=0?'good':'bad'):'';const priceTime=p&&p.source==='KIS_REALTIME'&&p.time?new Date(p.time).toLocaleTimeString('ko-KR'):(p?p.date:'—');return `<tr><td>${asOf||'—'}</td><td>${x.rank}</td><td>${x.code}</td><td>${x.name}</td><td><strong>${p?Number(p.close).toLocaleString():'—'}</strong></td><td>${priceTime}</td><td class="${changeClass}">${changeLabel}</td><td><strong>${x.total_score}</strong></td><td>${x.trend_score}</td><td>${x.momentum_score}</td><td>${x.volume_score}</td><td>${x.price_action_score}</td><td>${x.risk_score}</td><td>${x.context_score}</td></tr>`}).join('')+'</tbody></table>'}
+function renderOperationalCandidates(){
+  document.querySelector('#selected').innerHTML=candidates(L&&L.selected_candidates,latestDate);
+  document.querySelector('#observed').innerHTML=candidates(L&&L.observation_candidates,latestDate);
+}
+renderOperationalCandidates();
+const newsPanel=document.querySelector('#news-panel');
+const newsNote=document.querySelector('#news-note');
+const newsMessage=document.querySelector('#news-message');
+const newsLinks=document.querySelector('#news-links');
+const newsResults=document.querySelector('#news-results');
+document.querySelector('#current-panel').addEventListener('click',async event=>{
+  const button=event.target.closest('.news-check');
+  if(!button)return;
+  const code=button.dataset.code;
+  const name=button.dataset.name;
+  button.disabled=true;
+  newsPanel.style.display='';
+  newsPanel.scrollIntoView({behavior:'smooth',block:'nearest'});
+  newsNote.textContent=`${name} (${code}) · 최근 2일 기사 제목 검색 · 매수 점수에는 반영하지 않음`;
+  newsMessage.className='run-message';
+  newsMessage.textContent='최근 기사 제목을 검색 중입니다.';
+  newsLinks.innerHTML='';
+  newsResults.innerHTML='';
+  const naverUrl=`https://search.naver.com/search.naver?where=news&query=${encodeURIComponent(name+' 주식')}`;
+  const dartUrl=`https://dart.fss.or.kr/dsab007/main.do?option=corp&textCrpNm=${encodeURIComponent(name)}`;
+  try{
+    const response=await fetch('/api/news-headlines',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,name})});
+    const result=await jsonResponse(response);
+    const googleUrl=result.search_url||'';
+    newsLinks.innerHTML=`<a href="${safe(naverUrl)}" target="_blank" rel="noopener">네이버 뉴스 전체보기</a><a href="${safe(dartUrl)}" target="_blank" rel="noopener">DART 공시 확인</a>${googleUrl?`<a href="${safe(googleUrl)}" target="_blank" rel="noopener">Google 뉴스 전체보기</a>`:''}`;
+    if(!response.ok)throw new Error(result.message||'기사 제목 검색에 실패했습니다.');
+    const rows=result.headlines||[];
+    newsMessage.className=rows.length?'run-message good':'run-message';
+    newsMessage.textContent=rows.length?`${rows.length}건의 제목을 찾았습니다. 제목을 눌러 원문과 게시 시각을 확인하세요.`:'최근 2일 기사 제목이 없습니다.';
+    newsResults.innerHTML=rows.length?rows.map(x=>`<div class="news-item"><a href="${safe(x.url)}" target="_blank" rel="noopener">${safe(x.title)}</a><div class="news-meta">${safe(x.source||'출처 미표기')} · ${safe(x.published_at||'게시 시각 미표기')}</div></div>`).join(''):'<div class="empty">검색된 기사 제목이 없습니다.</div>';
+  }catch(error){
+    newsMessage.className='run-message error';
+    newsMessage.textContent=error.message;
+    newsLinks.innerHTML=`<a href="${safe(naverUrl)}" target="_blank" rel="noopener">네이버 뉴스에서 직접 확인</a><a href="${safe(dartUrl)}" target="_blank" rel="noopener">DART 공시 확인</a>`;
+  }finally{
+    button.disabled=false;
+  }
+});
+async function refreshOperationalPrices(){
+  const codes=[...new Set([...(L&&L.selected_candidates||[]),...(L&&L.observation_candidates||[])].map(x=>x.code))];
+  if(!codes.length)return;
+  const status=document.querySelector('#live-price-status');
+  status.textContent='KIS 현재가 갱신 중';
+  try{
+    const response=await fetch('/api/current-prices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({codes})});
+    const result=await jsonResponse(response);
+    if(!response.ok)throw new Error(result.message||'현재가 조회 실패');
+    Object.assign(operationalPrices,result.prices||{});
+    renderOperationalCandidates();
+    status.className='sub good';
+    status.textContent=`KIS 현재가 · ${new Date().toLocaleTimeString('ko-KR')} 갱신`;
+  }catch(error){
+    status.className='sub watch';
+    status.textContent=`로컬 최신 종가 표시 중 · ${error.message}`;
+  }
+}
+refreshOperationalPrices();
+setInterval(refreshOperationalPrices,60000);
+ document.querySelector('#history').innerHTML=operationalRuns.length?'<table><thead><tr><th>기준일</th><th>데이터</th><th>시장</th><th>상태</th><th>API</th><th>재시도</th><th>제외율</th><th>분석</th><th>선정</th><th>주문</th></tr></thead><tbody>'+operationalRuns.slice().reverse().map(x=>{const local=x.source==='LOCAL_KRX';const representative=[...(x.selected_candidates||[]),...(x.observation_candidates||[])][0];const market=x.market_regime||representative?.market_trend;return `<tr><td>${x.as_of.slice(0,10)}</td><td>${local?'로컬 KRX':'KIS'}</td><td>${regimeNames[market]||market||'—'}</td><td class="${x.status==='PASS'?'good':'bad'}">${x.status}</td><td>${local?'해당 없음':pct(x.api_success_rate)}</td><td>${local?'해당 없음':pct(x.retry_rate)}</td><td>${pct(x.exclusion_rate)}</td><td>${x.analyzed_count}</td><td>${x.selection_count}</td><td>${x.order_request_count||0}</td></tr>`}).join('')+'</tbody></table>':'<div class="empty">아직 S80 공식 실행 기록이 없습니다. 평일 장 마감 후부터 누적됩니다.</div>';
 </script></body></html>

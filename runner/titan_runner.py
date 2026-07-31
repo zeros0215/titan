@@ -139,11 +139,19 @@ class TitanRunner:
             else []
         )
         ranking = self.ranking_engine.rank(analyses)
-        selections = self.selection_engine.select(
-            ranking,
-            selected_date=selection_date,
-            top_n=top_n,
-        )
+        if (
+            self.filter_engine is not None
+            and hasattr(self.filter_engine, "selection_limit")
+        ):
+            top_n = self.filter_engine.selection_limit(analyses, top_n)
+        if top_n <= 0:
+            selections = []
+        else:
+            selections = self.selection_engine.select(
+                ranking,
+                selected_date=selection_date,
+                top_n=top_n,
+            )
         snapshot_path = (
             self.selection_repository.save(selections, selected_at=selection_date)
             if self.selection_repository is not None

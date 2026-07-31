@@ -236,4 +236,13 @@ class SelectionRepository:
             "foreign_flow": context.foreign_flow,
             "institution_flow": context.institution_flow,
             "score": context.score,
+            "kospi_short_trend": (
+                context.kospi_short_trend.value
+                if context.kospi_short_trend is not None else None
+            ),
+            "kosdaq_short_trend": (
+                context.kosdaq_short_trend.value
+                if context.kosdaq_short_trend is not None else None
+            ),
+            "short_market_strength": context.short_market_strength,
         }

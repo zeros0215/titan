@@ -21,8 +21,10 @@ Push-Location $projectRoot
 try {
     & $PythonExe -m app.main kis-pilot `
         --date $today `
-        --top-n 5 `
+        --top-n 7 `
+        --strategy-version V1.3-S80-N7-TP5-SL10-CANDIDATE `
         --active-data output/release/backtest_data.json `
+        --prefer-local-history `
         --output-dir output/kis_v1_1
     $pilotExit = $LASTEXITCODE
 

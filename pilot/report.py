@@ -4,6 +4,7 @@ def generate_kis_pilot_markdown(result) -> str:
         "",
         f"- 실행 ID: {result.run_id}",
         f"- 기준일: {result.as_of.isoformat()}",
+        f"- 데이터 소스: {result.source}",
         f"- 상태: **{result.status}**",
         f"- 실행시간: {result.duration_seconds:.2f}초",
         f"- 유니버스: {result.universe_count}",

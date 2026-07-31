@@ -16,6 +16,12 @@ class SelectionCriteria:
     minimum_risk_score: int = 5
     reject_combined_volatility_warnings: bool = False
     require_acceleration_or_volume_surge: bool = False
+    use_market_regime_rules: bool = False
+    strong_market_strength: float = 0.70
+    strong_score_adjustment: int = -3
+    sideways_score_adjustment: int = 5
+    sideways_maximum_momentum_5d: float = 8.0
+    use_short_term_market_overlay: bool = False
 
 
 SELECTION_CRITERIA = SelectionCriteria()

@@ -1,4 +1,4 @@
-"""Small, explicit peer groups for the sector-laggard research strategy."""
+"""Small, explicit peer groups for industry-relative strength research."""
 
 SECTOR_GROUPS: dict[str, dict[str, str]] = {
     "은행": {

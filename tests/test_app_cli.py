@@ -162,10 +162,12 @@ class AppCliTest(unittest.TestCase):
             "kis-pilot",
             "--date", "2026-07-28",
             "--top-n", "3",
+            "--prefer-local-history",
         ])
 
         self.assertEqual("kis-pilot", args.command)
         self.assertEqual(3, args.top_n)
+        self.assertTrue(args.prefer_local_history)
 
     def test_parses_kis_pilot_report_command(self) -> None:
         args = build_parser().parse_args([
@@ -175,6 +177,20 @@ class AppCliTest(unittest.TestCase):
 
         self.assertEqual("kis-pilot-report", args.command)
         self.assertEqual(5, args.required_days)
+
+    def test_parses_all_candidate_morning_manifest(self) -> None:
+        args = build_parser().parse_args([
+            "morning-entry-manifest",
+            "--runs-dir", "output/kis_manual_tests/runs",
+            "--strategy-version", "V1.3-S80-N7-TP5-SL10-CANDIDATE",
+            "--candidate-field", "all_candidates",
+            "--start-date", "2026-01-01",
+            "--end-date", "2026-12-31",
+            "--output", "output/morning_entry/manifest_2026.json",
+        ])
+
+        self.assertEqual("all_candidates", args.candidate_field)
+        self.assertEqual(date(2026, 1, 1), args.start_date)
 
     def test_parses_v1_release_commands(self) -> None:
         frozen = build_parser().parse_args(["v1-freeze"])
@@ -220,13 +236,13 @@ class AppCliTest(unittest.TestCase):
 
         self.assertEqual("krx-price-build", args.command)
 
-    def test_parses_sector_laggard_command(self) -> None:
+    def test_parses_industry_rs_command(self) -> None:
         args = build_parser().parse_args([
-            "sector-laggard-test",
+            "industry-rs-test",
             "--end-date", "2023-09-01",
         ])
 
-        self.assertEqual("sector-laggard-test", args.command)
+        self.assertEqual("industry-rs-test", args.command)
         self.assertEqual("2022-04-01", args.start_date)
         self.assertEqual("2023-09-01", args.end_date)
 
