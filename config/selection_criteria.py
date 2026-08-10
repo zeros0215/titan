@@ -22,6 +22,17 @@ class SelectionCriteria:
     sideways_score_adjustment: int = 5
     sideways_maximum_momentum_5d: float = 8.0
     use_short_term_market_overlay: bool = False
+    # Offline research only. Operational profiles leave this unset.
+    research_market_filter: str | None = None
+    research_entry_filter: str | None = None
+    research_peer_filter: str | None = None
+    research_breakout_threshold_credit: int = 0
+    trend_weight: int = 30
+    momentum_weight: int = 15
+    volume_weight: int = 15
+    price_action_weight: int = 15
+    risk_weight: int = 15
+    context_weight: int = 10
 
 
 SELECTION_CRITERIA = SelectionCriteria()

@@ -91,6 +91,9 @@ def summarize_event_shadow(
             "entry_time": run["executed_at"],
             "code": code,
             "name": candidate.get("name", code),
+            "cohort": candidate.get("cohort", "SELECTED"),
+            "selection_date": candidate.get("selection_date"),
+            "hypothetical_entry": bool(candidate.get("hypothetical_entry")),
             "entry_price": entry_price,
             "latest_price": latest_price,
             "exit_date": exit_date,
@@ -123,6 +126,60 @@ def summarize_event_shadow(
         ),
         "trades": trades,
     }
+
+
+def summarize_operational_shadow(
+    runs: list[dict],
+    price_dir: Path | None,
+    profit_target: float = 0.05,
+    stop_loss: float = 0.10,
+    maximum_sessions: int = 20,
+) -> dict:
+    """Track only S80 quotes that passed the entry-gap rule."""
+    normalized = [{
+        **run,
+        "candidates": [
+            {**candidate, "close": candidate.get("entry_price")}
+            for candidate in run.get("candidates", [])
+            if candidate.get("entry_allowed") is True
+            and candidate.get("cohort", "SELECTED") == "SELECTED"
+        ],
+    } for run in runs]
+    summary = summarize_event_shadow(
+        normalized, price_dir, profit_target, stop_loss, maximum_sessions,
+    )
+    summary["strategy"]["entry"] = (
+        "S80 선정군의 09:50~10:10 저장 가격 중 10시에 가장 가까운 값"
+    )
+    return summary
+
+
+def summarize_observation_shadow(
+    runs: list[dict],
+    price_dir: Path | None,
+    profit_target: float = 0.05,
+    stop_loss: float = 0.10,
+    maximum_sessions: int = 20,
+) -> dict:
+    """Track observation names as hypothetical 09:50~10:10 entries only."""
+    normalized = [{
+        **run,
+        "candidates": [
+            {**candidate, "close": candidate.get("entry_price")}
+            for candidate in run.get("candidates", [])
+            if candidate.get("cohort") == "OBSERVATION"
+            and candidate.get("hypothetical_entry") is True
+        ],
+    } for run in runs]
+    summary = summarize_event_shadow(
+        normalized, price_dir, profit_target, stop_loss, maximum_sessions,
+    )
+    summary["strategy"]["entry"] = (
+        "observation quote from 09:50~10:10 used as hypothetical entry"
+    )
+    summary["research_only"] = True
+    summary["operational_orders"] = 0
+    return summary
 
 
 def _candles(price_dir: Path | None, code: str) -> list[dict]:

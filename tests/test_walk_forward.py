@@ -21,6 +21,20 @@ class WalkForwardTest(unittest.TestCase):
         self.assertEqual(plan.folds[2].training_end.year, 2024)
         self.assertEqual(plan.folds[2].test_start.year, 2025)
 
+    def test_weekly_dates_start_on_first_weekday(self) -> None:
+        fold = WalkForwardPlan.expanding_years(2022, 2023, 2023).folds[0]
+        dates = fold.selection_dates(1, interval_days=7)
+
+        self.assertGreater(len(dates), 50)
+        self.assertTrue(all(item.weekday() < 5 for item in dates))
+
+    def test_daily_dates_exclude_weekends(self) -> None:
+        fold = WalkForwardPlan.expanding_years(2022, 2023, 2023).folds[0]
+        dates = fold.selection_dates(1, interval_days=1)
+
+        self.assertTrue(all(item.weekday() < 5 for item in dates))
+        self.assertGreater(len(dates), 250)
+
     def test_replays_frozen_strategy_and_reports_incomplete_universe(self) -> None:
         selection_runner = _SelectionRunner()
         validation_runner = _ValidationRunner()

@@ -87,6 +87,90 @@ class PriceActionFeatureExtractor(BaseFeatureExtractor):
             negative_reason="20일 신고가 미도달"
         )
 
+        # Research-only, point-in-time pullback signal. A breakout must have
+        # occurred in one of the prior five sessions; today's close must hold
+        # near that breakout close and above the current five-session average.
+        breakouts = []
+        for index in range(max(20, len(series) - 6), len(series) - 1):
+            prior_high = max(series.highs[index - 20:index])
+            if prior_high > 0 and series.closes[index] >= prior_high:
+                average_volume = sum(
+                    series.volumes[index - 20:index]
+                ) / 20
+                breakouts.append((
+                    index,
+                    series.closes[index],
+                    average_volume > 0
+                    and series.volumes[index] >= 1.5 * average_volume,
+                ))
+        breakout_index, reference, volume_confirmed = (
+            breakouts[-1] if breakouts else (-1, 0.0, False)
+        )
+        ratio = series.closes[-1] / reference if reference > 0 else 0.0
+        enabled = (
+            reference > 0
+            and 0.97 <= ratio <= 1.02
+            and series.closes[-1] >= indicators.moving_average.ma5
+        )
+        self._add_feature(
+            features=features,
+            feature_type=FeatureType.RECENT_BREAKOUT_PULLBACK,
+            enabled=enabled,
+            strength=1.0 if enabled else 0.0,
+            value=ratio,
+            positive_reason="recent breakout pullback held",
+            negative_reason="recent breakout pullback condition not met",
+        )
+
+        after_breakout = (
+            series.closes[breakout_index + 1:-1]
+            if breakout_index >= 0 else []
+        )
+        confirmed = (
+            enabled
+            and bool(after_breakout)
+            and min(after_breakout) <= reference * 0.99
+            and series.closes[-1] > series.closes[-2]
+        )
+        self._add_feature(
+            features=features,
+            feature_type=FeatureType.CONFIRMED_BREAKOUT_PULLBACK,
+            enabled=confirmed,
+            strength=1.0 if confirmed else 0.0,
+            value=ratio,
+            positive_reason="breakout, pullback, and rebound confirmed",
+            negative_reason="pullback and rebound not confirmed",
+        )
+        self._add_feature(
+            features=features,
+            feature_type=FeatureType.VOLUME_CONFIRMED_BREAKOUT_PULLBACK,
+            enabled=confirmed and volume_confirmed,
+            strength=1.0 if confirmed and volume_confirmed else 0.0,
+            value=ratio,
+            positive_reason="volume breakout, pullback, and rebound confirmed",
+            negative_reason="volume-confirmed pullback condition not met",
+        )
+
+        prior20 = max(series.highs[-21:-1])
+        previous_prior20 = max(series.highs[-22:-2])
+        average_prior_volume = sum(series.volumes[-21:-1]) / 20
+        first_volume_breakout = (
+            prior20 > 0
+            and series.closes[-1] >= prior20
+            and series.closes[-2] < previous_prior20
+            and average_prior_volume > 0
+            and series.volumes[-1] >= 1.5 * average_prior_volume
+        )
+        self._add_feature(
+            features=features,
+            feature_type=FeatureType.FIRST_VOLUME_BREAKOUT_20,
+            enabled=first_volume_breakout,
+            strength=1.0 if first_volume_breakout else 0.0,
+            value=series.closes[-1] / prior20 if prior20 > 0 else 0.0,
+            positive_reason="first 20-session breakout with volume confirmation",
+            negative_reason="first volume-confirmed breakout condition not met",
+        )
+
     @staticmethod
     def _add_feature(
         features: FeatureSet,

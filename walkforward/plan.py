@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 @dataclass(slots=True, frozen=True)
@@ -10,7 +10,23 @@ class WalkForwardFold:
     test_start: datetime
     test_end: datetime
 
-    def selection_dates(self, interval_months: int) -> list[datetime]:
+    def selection_dates(
+        self, interval_months: int, interval_days: int | None = None,
+    ) -> list[datetime]:
+        if interval_days is not None:
+            if interval_days <= 0:
+                raise ValueError("interval_days must be greater than zero")
+            dates = []
+            current = datetime(
+                self.test_start.year, self.test_start.month, self.test_start.day
+            )
+            while current.weekday() >= 5:
+                current += timedelta(days=1)
+            while current <= self.test_end:
+                if current.weekday() < 5:
+                    dates.append(current)
+                current += timedelta(days=interval_days)
+            return dates
         if interval_months <= 0:
             raise ValueError("interval_months must be greater than zero")
         dates = []

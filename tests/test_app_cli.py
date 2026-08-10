@@ -127,6 +127,61 @@ class AppCliTest(unittest.TestCase):
         self.assertEqual("strategy-evaluate", evaluated.command)
         self.assertEqual("strategy-approve", approved.command)
 
+    def test_parses_strategy_research_commands(self) -> None:
+        generated = build_parser().parse_args(["strategy-research-generate"])
+        ranked = build_parser().parse_args([
+            "strategy-research-rank",
+            "--results-dir", "output/walk_forward",
+        ])
+        run = build_parser().parse_args(["strategy-research-run"])
+        weekly = build_parser().parse_args(["strategy-research-run", "--weekly"])
+        challengers = build_parser().parse_args([
+            "strategy-research-run", "--challenger-experiment",
+        ])
+        shadow = build_parser().parse_args([
+            "strategy-shadow-run", "--date", "2026-08-05",
+        ])
+        replay = build_parser().parse_args([
+            "strategy-shadow-replay", "--month", "2026-01",
+        ])
+        weekday = build_parser().parse_args([
+            "strategy-shadow-weekday-test",
+            "--start-month", "2026-01", "--end-month", "2026-06",
+        ])
+        event_g = build_parser().parse_args([
+            "strategy-research-run", "--event-breakout-experiment",
+        ])
+        monthly_rs = build_parser().parse_args([
+            "strategy-monthly-rs-test", "--start-year", "2021",
+            "--end-date", "2026-08-05",
+            "--defensive",
+        ])
+        adaptive = build_parser().parse_args([
+            "strategy-adaptive-momentum-test", "--start-year", "2021",
+        ])
+        scorecard = build_parser().parse_args(["strategy-research-scorecard"])
+        horizons = build_parser().parse_args(["strategy-ac-horizon-test"])
+        audit = build_parser().parse_args(["strategy-ac-audit"])
+
+        self.assertEqual("strategy-research-generate", generated.command)
+        self.assertEqual("strategy-research-rank", ranked.command)
+        self.assertEqual(100, ranked.minimum_trades)
+        self.assertEqual("strategy-research-run", run.command)
+        self.assertTrue(weekly.weekly)
+        self.assertTrue(challengers.challenger_experiment)
+        self.assertEqual("strategy-shadow-run", shadow.command)
+        self.assertEqual(2026, shadow.date.year)
+        self.assertEqual("weekly", replay.cadence)
+        self.assertEqual("2026-06", weekday.end_month)
+        self.assertTrue(event_g.event_breakout_experiment)
+        self.assertEqual("strategy-monthly-rs-test", monthly_rs.command)
+        self.assertEqual(date(2026, 8, 5), monthly_rs.end_date)
+        self.assertTrue(monthly_rs.defensive)
+        self.assertEqual("strategy-adaptive-momentum-test", adaptive.command)
+        self.assertEqual("strategy-research-scorecard", scorecard.command)
+        self.assertEqual("strategy-ac-horizon-test", horizons.command)
+        self.assertEqual("strategy-ac-audit", audit.command)
+
     def test_parses_universe_compile_command(self) -> None:
         args = build_parser().parse_args([
             "universe-compile",

@@ -45,17 +45,33 @@ from universe_history.krx import (
     KrxUniverseClient,
     KrxUniverseCollector,
 )
+from research.strategy_search import (
+    generate_bounded_candidates,
+    rank_walk_forward_results,
+    render_ranking_markdown,
+    save_candidate_grid,
+)
 
 
 HOST = "127.0.0.1"
 PORT = 8765
 RUN_LOCK = threading.Lock()
 PRICE_LOCK = threading.Lock()
+OPERATIONAL_VERSION = "V1.3-S80-N7-TP5-SL10-CANDIDATE"
+ACTIVE_TASK: dict[str, str] = {}
 
 
 class DashboardHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
-        if urlparse(self.path).path not in ("/", "/index.html"):
+        path = urlparse(self.path).path
+        if path == "/api/status":
+            self._json(200, {
+                "busy": RUN_LOCK.locked(),
+                "task": ACTIVE_TASK.get("task"),
+                "started_at": ACTIVE_TASK.get("started_at"),
+            })
+            return
+        if path not in ("/", "/index.html"):
             self.send_error(404)
             return
         if not LOCAL_INDEX.exists():
@@ -88,6 +104,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "/api/current-prices",
             "/api/news-headlines",
             "/api/run-event-candidates",
+            "/api/research-generate",
+            "/api/research-rank",
+            "/api/research-run",
+            "/api/research-run-weekly",
+            "/api/research-run-challengers",
+            "/api/research-shadow-run",
+            "/api/research-shadow-replay",
+            "/api/research-shadow-weekday",
         ):
             self._json(
                 404,
@@ -110,6 +134,254 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/run-event-candidates":
             self._run_event_candidates()
+            return
+        if path == "/api/research-generate":
+            candidates = generate_bounded_candidates()
+            manifest = save_candidate_grid(
+                ROOT / "output" / "strategy_research" / "candidates",
+                candidates,
+            )
+            build_dashboard()
+            self._json(200, {
+                "message": "연구 후보 생성 완료",
+                "candidate_count": len(candidates),
+                "manifest": str(manifest.relative_to(ROOT)),
+                "operational_strategy_unchanged": True,
+            })
+            return
+        if path == "/api/research-shadow-run":
+            if not RUN_LOCK.acquire(blocking=False):
+                self._json(409, {"message": "another task is already running"})
+                return
+            _set_active_task("STRATEGY_SHADOW")
+            try:
+                result = subprocess.run(
+                    [sys.executable, "-m", "app.main", "strategy-shadow-run"],
+                    cwd=ROOT, capture_output=True, text=True, timeout=1800,
+                )
+                if result.returncode:
+                    output = "\n".join((result.stdout, result.stderr)).strip()
+                    self._json(500, {"message": output.splitlines()[-1] if output else "shadow run failed"})
+                    return
+                build_dashboard()
+                self._json(200, {
+                    "message": "A/C shadow run completed",
+                    "operational_orders": 0,
+                })
+            except subprocess.TimeoutExpired:
+                self._json(504, {"message": "shadow run exceeded 30 minutes"})
+            finally:
+                _clear_active_task()
+                RUN_LOCK.release()
+            return
+        if path == "/api/research-shadow-replay":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                payload = json.loads(self.rfile.read(length) or b"{}")
+                month = datetime.strptime(payload["month"], "%Y-%m").strftime("%Y-%m")
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                self._json(400, {"message": "month must use YYYY-MM format"})
+                return
+            if not RUN_LOCK.acquire(blocking=False):
+                self._json(409, {"message": "another task is already running"})
+                return
+            _set_active_task("STRATEGY_SHADOW_REPLAY")
+            try:
+                result = subprocess.run(
+                    [sys.executable, "-m", "app.main", "strategy-shadow-replay", "--month", month],
+                    cwd=ROOT, capture_output=True, text=True, timeout=3600,
+                )
+                if result.returncode:
+                    output = "\n".join((result.stdout, result.stderr)).strip()
+                    self._json(500, {"message": output.splitlines()[-1] if output else "shadow replay failed"})
+                    return
+                build_dashboard()
+                self._json(200, {
+                    "message": f"{month} weekly shadow replay completed",
+                    "operational_orders": 0,
+                })
+            except subprocess.TimeoutExpired:
+                self._json(504, {"message": "shadow replay exceeded 60 minutes"})
+            finally:
+                _clear_active_task()
+                RUN_LOCK.release()
+            return
+        if path == "/api/research-shadow-weekday":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                payload = json.loads(self.rfile.read(length) or b"{}")
+                start = datetime.strptime(payload["start_month"], "%Y-%m").strftime("%Y-%m")
+                end = datetime.strptime(payload["end_month"], "%Y-%m").strftime("%Y-%m")
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                self._json(400, {"message": "months must use YYYY-MM format"})
+                return
+            if not RUN_LOCK.acquire(blocking=False):
+                self._json(409, {"message": "another task is already running"})
+                return
+            _set_active_task("STRATEGY_WEEKDAY_TEST")
+            try:
+                result = subprocess.run(
+                    [sys.executable, "-m", "app.main", "strategy-shadow-weekday-test", "--start-month", start, "--end-month", end],
+                    cwd=ROOT, capture_output=True, text=True, timeout=3600,
+                )
+                if result.returncode:
+                    output = "\n".join((result.stdout, result.stderr)).strip()
+                    self._json(500, {"message": output.splitlines()[-1] if output else "weekday test failed"})
+                    return
+                build_dashboard()
+                self._json(200, {"message": f"{start}..{end} weekday test completed", "operational_orders": 0})
+            except subprocess.TimeoutExpired:
+                self._json(504, {"message": "weekday test exceeded 60 minutes"})
+            finally:
+                _clear_active_task()
+                RUN_LOCK.release()
+            return
+        if path == "/api/research-rank":
+            paths = sorted((ROOT / "output" / "walk_forward").glob("walk_forward_result_*.json"))
+            rows = rank_walk_forward_results(paths, minimum_trades=100)
+            output = ROOT / "output" / "strategy_research" / "ranking.md"
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(render_ranking_markdown(rows), encoding="utf-8")
+            build_dashboard()
+            self._json(200, {
+                "message": "기존 워크포워드 결과 순위 계산 완료",
+                "result_count": len(rows),
+                "eligible_count": sum(row["eligible"] for row in rows),
+                "operational_strategy_unchanged": True,
+            })
+            return
+        if path == "/api/research-monthly-rs":
+            if not RUN_LOCK.acquire(blocking=False):
+                self._json(409, {"message": "another task is already running"})
+                return
+            _set_active_task("STRATEGY_MONTHLY_RS")
+            try:
+                data_path = ROOT / "output" / "data_extensions" / "2020_20260805" / "backtest_data.json"
+                result = subprocess.run(
+                    [sys.executable, "-m", "app.main", "strategy-monthly-rs-test",
+                     "--active-data", str(data_path), "--start-year", "2021",
+                     "--end-date", "2026-08-05", "--defensive"],
+                    cwd=ROOT, capture_output=True, text=True, timeout=600,
+                )
+                if result.returncode:
+                    output = "\n".join((result.stdout, result.stderr)).strip()
+                    self._json(500, {"message": output.splitlines()[-1] if output else "monthly RS test failed"})
+                    return
+                build_dashboard()
+                self._json(200, {"message": "I 월간 전략 검증 완료", "operational_orders": 0})
+            except subprocess.TimeoutExpired:
+                self._json(504, {"message": "monthly RS test exceeded 10 minutes"})
+            finally:
+                _clear_active_task()
+                RUN_LOCK.release()
+            return
+        if path == "/api/research-run":
+            if not RUN_LOCK.acquire(blocking=False):
+                self._json(409, {"message": "다른 작업이 이미 실행 중입니다."})
+                return
+            _set_active_task("STRATEGY_RESEARCH")
+            try:
+                result = subprocess.run(
+                    [
+                        sys.executable, "-m", "app.main",
+                        "strategy-research-run",
+                        "--history-start-year", "2022",
+                        "--first-test-year", "2023",
+                        "--last-test-year", "2025",
+                    ],
+                    cwd=ROOT, capture_output=True, text=True, timeout=3600,
+                )
+                if result.returncode:
+                    output = "\n".join((result.stdout, result.stderr)).strip()
+                    self._json(500, {"message": output.splitlines()[-1] if output else "연구 실행 실패"})
+                    return
+                paths = sorted((ROOT / "output" / "walk_forward").glob("walk_forward_result_*.json"))
+                rows = rank_walk_forward_results(paths, minimum_trades=100)
+                ranking = ROOT / "output" / "strategy_research" / "ranking.md"
+                ranking.write_text(render_ranking_markdown(rows), encoding="utf-8")
+                build_dashboard()
+                self._json(200, {
+                    "message": "대표 후보 5개 워크포워드 완료",
+                    "result_count": len(rows),
+                    "operational_strategy_unchanged": True,
+                })
+            except subprocess.TimeoutExpired:
+                self._json(504, {"message": "전략 연구가 60분 제한을 초과했습니다."})
+            finally:
+                _clear_active_task()
+                RUN_LOCK.release()
+            return
+        if path == "/api/research-run-challengers":
+            if not RUN_LOCK.acquire(blocking=False):
+                self._json(409, {"message": "another task is already running"})
+                return
+            _set_active_task("STRATEGY_CHALLENGERS")
+            try:
+                result = subprocess.run(
+                    [
+                        sys.executable, "-m", "app.main",
+                        "strategy-research-run",
+                        "--history-start-year", "2022",
+                        "--first-test-year", "2023",
+                        "--last-test-year", "2026",
+                        "--challenger-experiment",
+                    ],
+                    cwd=ROOT, capture_output=True, text=True, timeout=7200,
+                )
+                if result.returncode:
+                    output = "\n".join((result.stdout, result.stderr)).strip()
+                    self._json(500, {
+                        "message": output.splitlines()[-1]
+                        if output else "challenger research failed",
+                    })
+                    return
+                paths = sorted(
+                    (ROOT / "output" / "walk_forward").glob("walk_forward_result_*.json")
+                )
+                rows = rank_walk_forward_results(paths, minimum_trades=100)
+                ranking = ROOT / "output" / "strategy_research" / "ranking.md"
+                ranking.write_text(
+                    render_ranking_markdown(rows), encoding="utf-8"
+                )
+                build_dashboard()
+                self._json(200, {
+                    "message": "six challenger validations completed",
+                    "result_count": len(rows),
+                    "operational_strategy_unchanged": True,
+                })
+            except subprocess.TimeoutExpired:
+                self._json(504, {"message": "challenger research exceeded 120 minutes"})
+            finally:
+                _clear_active_task()
+                RUN_LOCK.release()
+            return
+        if path == "/api/research-run-weekly":
+            if not RUN_LOCK.acquire(blocking=False):
+                self._json(409, {"message": "다른 작업이 이미 실행 중입니다."})
+                return
+            _set_active_task("STRATEGY_RESEARCH_WEEKLY")
+            try:
+                result = subprocess.run([
+                    sys.executable, "-m", "app.main", "strategy-research-run",
+                    "--history-start-year", "2022", "--first-test-year", "2023",
+                    "--last-test-year", "2025", "--weekly",
+                ], cwd=ROOT, capture_output=True, text=True, timeout=3600)
+                if result.returncode:
+                    output = "\n".join((result.stdout, result.stderr)).strip()
+                    self._json(500, {"message": output.splitlines()[-1] if output else "주간 연구 실패"})
+                    return
+                rows = rank_walk_forward_results(
+                    sorted((ROOT / "output" / "walk_forward").glob("walk_forward_result_*.json")), 100,
+                )
+                ranking = ROOT / "output" / "strategy_research" / "ranking.md"
+                ranking.write_text(render_ranking_markdown(rows), encoding="utf-8")
+                build_dashboard()
+                self._json(200, {"message": "기준형·위험강화형 주간 검증 완료"})
+            except subprocess.TimeoutExpired:
+                self._json(504, {"message": "주간 연구가 60분 제한을 초과했습니다."})
+            finally:
+                _clear_active_task()
+                RUN_LOCK.release()
             return
         if path == "/api/run-data-update":
             self._run_data_update()
@@ -151,6 +423,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not RUN_LOCK.acquire(blocking=False):
             self._json(409, {"message": "다른 테스트가 이미 실행 중입니다."})
             return
+        _set_active_task("DAILY_TEST")
         try:
             if as_of < date.today():
                 local_result = run_date(as_of.isoformat(), top_n=5)
@@ -190,6 +463,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except subprocess.TimeoutExpired:
             self._json(504, {"message": "테스트가 30분 제한시간을 초과했습니다."})
         finally:
+            _clear_active_task()
             RUN_LOCK.release()
 
     def _run_month(self) -> None:
@@ -295,6 +569,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not RUN_LOCK.acquire(blocking=False):
             self._json(409, {"message": "다른 작업이 이미 실행 중입니다."})
             return
+        _set_active_task("S80_OPERATIONAL_SELECTION")
         try:
             result = subprocess.run(
                 [
@@ -336,6 +611,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except subprocess.TimeoutExpired:
             self._json(504, {"message": "선정 작업이 30분 제한을 초과했습니다."})
         finally:
+            _clear_active_task()
             RUN_LOCK.release()
 
     def _current_prices(self) -> None:
@@ -356,7 +632,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         provider = KisCurrentPriceProvider()
         try:
-            self._json(200, {"prices": provider.get_prices(codes)})
+            prices = provider.get_prices(codes)
+            snapshot = _save_operational_entry_snapshot(prices)
+            self._json(200, {
+                "prices": prices,
+                "entry_snapshot_saved": snapshot is not None,
+                "entry_snapshot": snapshot,
+            })
         except (
             OSError, TypeError, ValueError, KisApiException, httpx.HTTPError,
         ) as exc:
@@ -727,6 +1009,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not RUN_LOCK.acquire(blocking=False):
             self._json(409, {"message": "다른 작업이 이미 실행 중입니다."})
             return
+        _set_active_task("DATA_UPDATE")
         try:
             target = _latest_completed_weekday()
             active_path = ROOT / "output" / "release" / "backtest_data.json"
@@ -853,6 +1136,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         ) as exc:
             self._json(500, {"message": f"데이터 업데이트 실패: {exc}"})
         finally:
+            _clear_active_task()
             RUN_LOCK.release()
 
     def _run_pre_breakout(self) -> None:
@@ -943,6 +1227,96 @@ def _latest_completed_weekday(now: datetime | None = None) -> date:
     while candidate.weekday() >= 5:
         candidate -= timedelta(days=1)
     return candidate
+
+
+def _set_active_task(task: str) -> None:
+    ACTIVE_TASK.clear()
+    ACTIVE_TASK.update({
+        "task": task,
+        "started_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+    })
+
+
+def _clear_active_task() -> None:
+    ACTIVE_TASK.clear()
+
+
+def _save_operational_entry_snapshot(
+    prices: dict[str, dict],
+    now: datetime | None = None,
+) -> dict | None:
+    """Persist selected S80 quotes obtained during the 09:50–10:10 window."""
+    now = (now or datetime.now().astimezone()).astimezone()
+    minute = now.hour * 60 + now.minute
+    if not 9 * 60 + 50 <= minute <= 10 * 60 + 10:
+        return None
+    runs = PilotHistoryRepository(ROOT / "output" / "kis_v1_1" / "runs").load_all()
+    runs = [
+        run for run in runs
+        if run.get("strategy_version") == OPERATIONAL_VERSION
+        and run.get("status") == "PASS"
+        and run.get("selected_candidates")
+    ]
+    if not runs:
+        return None
+    run = max(runs, key=lambda item: str(item.get("as_of", "")))
+    selected = {
+        str(item["code"]).zfill(6): {**item, "cohort": "SELECTED"}
+        for item in run.get("selected_candidates", [])
+    }
+    observed = {
+        str(item["code"]).zfill(6): {**item, "cohort": "OBSERVATION"}
+        for item in run.get("observation_candidates", [])
+    }
+    tracked = {**observed, **selected}
+    candidates = []
+    for code, quote in prices.items():
+        if code not in tracked:
+            continue
+        candidate = tracked[code]
+        is_observation = candidate["cohort"] == "OBSERVATION"
+        gap_allowed = (
+            quote.get("change_rate") is not None
+            and float(quote["change_rate"]) <= 0.03
+        )
+        candidates.append({
+            "code": code,
+            "name": candidate.get("name", code),
+            "score": candidate.get("total_score"),
+            "cohort": candidate["cohort"],
+            "hypothetical_entry": is_observation,
+            "selection_date": str(run["as_of"])[:10],
+            "entry_price": quote.get("close"),
+            "change_rate": quote.get("change_rate"),
+            "quote_time": quote.get("time"),
+            "entry_allowed": gap_allowed if not is_observation else False,
+            "exclusion_reason": (
+                "OBSERVATION_HYPOTHETICAL_ONLY" if is_observation
+                else None if gap_allowed else "ENTRY_GAP_ABOVE_3_PERCENT"
+            ),
+        })
+    if not candidates:
+        return None
+    payload = {
+        "executed_at": now.isoformat(timespec="seconds"),
+        "snapshot_phase": "ENTRY",
+        "strategy_version": OPERATIONAL_VERSION,
+        "source_run_id": run.get("run_id"),
+        "shadow_only": True,
+        "entry_rule": "selected: change rate <= +3%; observation: hypothetical only",
+        "candidates": candidates,
+    }
+    output_dir = ROOT / "output" / "kis_v1_1" / "entry_snapshots"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / now.strftime("%Y%m%dT%H%M%S.json")
+    output_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return {
+        "path": str(output_path.relative_to(ROOT)),
+        "candidate_count": len(candidates),
+    }
 
 
 def _news_urls(name: str) -> tuple[str, str, str]:

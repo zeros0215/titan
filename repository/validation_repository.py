@@ -23,14 +23,18 @@ class ValidationRepository:
     def __init__(self, directory: Path | None = None) -> None:
         self.directory = directory or OUTPUT_DIR / "validations"
 
-    def save(self, record: ValidationRecord) -> Path:
+    def save(self, record: ValidationRecord, selection_results=None) -> Path:
         self.directory.mkdir(parents=True, exist_ok=True)
         path = self.directory / (
             f"{record.selected_at:%Y%m%dT%H%M%S}_"
             f"{record.evaluation_date:%Y%m%dT%H%M%S}.json"
         )
         path.write_text(
-            json.dumps(self._serialize(record), ensure_ascii=False, indent=2),
+            json.dumps(
+                self._serialize(record, selection_results),
+                ensure_ascii=False,
+                indent=2,
+            ),
             encoding="utf-8",
         )
         return path
@@ -52,9 +56,9 @@ class ValidationRepository:
         )
 
     @staticmethod
-    def _serialize(record: ValidationRecord) -> dict:
+    def _serialize(record: ValidationRecord, selection_results=None) -> dict:
         result = record.result
-        return {
+        payload = {
             "selected_at": record.selected_at.isoformat(),
             "evaluation_date": record.evaluation_date.isoformat(),
             "holding_days": record.holding_days,
@@ -131,6 +135,22 @@ class ValidationRepository:
                 ],
             },
         }
+        if selection_results is not None:
+            payload["trades"] = [
+                {
+                    "code": item.code,
+                    "name": item.name,
+                    "rank": item.rank,
+                    "selection_price": item.selection_price,
+                    "evaluation_price": item.evaluation_price,
+                    "gross_return": item.return_rate,
+                    "net_return": item.effective_return_rate,
+                    "benchmark_return": item.benchmark_return_rate,
+                    "excess_return": item.excess_return_rate,
+                }
+                for item in selection_results
+            ]
+        return payload
 
     @staticmethod
     def _deserialize(payload: dict) -> ValidationRecord:

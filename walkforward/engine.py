@@ -27,6 +27,7 @@ class WalkForwardEngine:
         interval_months: int = 1,
         top_n: int = 5,
         success_return: float = 0.03,
+        interval_days: int | None = None,
     ) -> WalkForwardResult:
         if holding_days <= 0:
             raise ValueError("holding_days must be greater than zero")
@@ -35,7 +36,7 @@ class WalkForwardEngine:
             validations = []
             errors = []
             coverages = []
-            dates = fold.selection_dates(interval_months)
+            dates = fold.selection_dates(interval_months, interval_days)
             completed = 0
             for selected_at in dates:
                 try:
@@ -78,5 +79,6 @@ class WalkForwardEngine:
             strategy_version=self.strategy_version,
             holding_days=holding_days,
             interval_months=interval_months,
+            interval_days=interval_days,
             strategy_config_hash=self.strategy_config_hash,
         )

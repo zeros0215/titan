@@ -64,6 +64,26 @@ class SelectionCriteriaTest(unittest.TestCase):
         self.assertEqual(engine.selection_limit([normal], 7), 5)
         self.assertEqual(engine.selection_limit([sideways], 7), 3)
 
+    def test_industry_peer_filter_keeps_positive_top_thirty_percent(self) -> None:
+        members = []
+        for code, momentum in (
+            ("105560", 12.0),
+            ("055550", 8.0),
+            ("086790", 4.0),
+            ("316140", 1.0),
+        ):
+            item = SimpleNamespace(
+                code=code,
+                indicators=SimpleNamespace(
+                    momentum=SimpleNamespace(momentum_20=momentum),
+                ),
+            )
+            members.append(item)
+
+        result = FilterEngine._strong_industry_top30(members)
+
+        self.assertEqual([item.code for item in result], ["105560", "055550"])
+
     @staticmethod
     def _candidate(trend: MarketTrend, momentum_5: float):
         context = MarketContext(

@@ -29,6 +29,7 @@ class WalkForwardRepository:
             "strategy_frozen": result.strategy_frozen,
             "holding_days": result.holding_days,
             "interval_months": result.interval_months,
+            "interval_days": result.interval_days,
             "folds": [
                 {
                     "index": item.fold.index,

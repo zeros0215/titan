@@ -37,6 +37,7 @@ from data.quarantine import QualityQuarantinePolicy
 from broker.historical import HistoricalFileMarketProvider
 from release.backtest_data import load_active_backtest_data
 from repository.market_cap_stock_repository import MarketCapStockRepository
+from benchmark.equal_weight import HistoricalEqualWeightBenchmarkProvider
 
 
 def create_titan_runner(
@@ -61,7 +62,7 @@ def create_titan_runner(
     analyzer = Analyzer(
         indicator_calculator=IndicatorCalculator(),
         feature_engine=FeatureEngine(),
-        score_engine=ScoreEngine(),
+        score_engine=ScoreEngine(criteria),
         prediction_engine=PredictionEngine(criteria),
         decision_engine=DecisionEngine(),
     )
@@ -155,8 +156,11 @@ def create_walk_forward_engine(
     strategy_version: str = VERSION,
     criteria=SELECTION_CRITERIA,
     strategy_config_hash: str | None = None,
+    active_data_path: Path | None = None,
 ) -> WalkForwardEngine:
-    active_data_path = OUTPUT_DIR / "release" / "backtest_data.json"
+    active_data_path = (
+        active_data_path or OUTPUT_DIR / "release" / "backtest_data.json"
+    )
     universe_dir, price_dir, _ = load_active_backtest_data(active_data_path)
     artifact_root = OUTPUT_DIR / "walk_forward" / "artifacts" / strategy_version
     return WalkForwardEngine(
@@ -198,11 +202,9 @@ def _create_historical_validation_runner(
         validation_repository=ValidationRepository(
             artifact_root / "validations"
         ),
-        # Compiled equity histories do not contain official KOSPI/KOSDAQ
-        # index candles. Never mix deterministic MOCK returns into a real
-        # KRX baseline; excess return remains unavailable until index data is
-        # promoted separately.
-        benchmark_provider=None,
+        # Research-only point-in-time market-cap cohort. This is not an
+        # official index and is labeled separately in research reports.
+        benchmark_provider=HistoricalEqualWeightBenchmarkProvider(price_dir),
     )
 
 

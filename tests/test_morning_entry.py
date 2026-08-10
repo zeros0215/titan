@@ -6,6 +6,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from analysis.morning_entry import (
+    _bounded_daily_exit,
+    _no_progress_daily_exit,
+    audit_intraday_exit_coverage,
     build_collection_manifest,
     build_daily_collection_manifest,
     evaluate_morning_bars,
@@ -109,6 +112,85 @@ class MorningEntryTest(unittest.TestCase):
             result = evaluate_morning_bars(path, previous_close=100)
             self.assertFalse(result["qualified"])
             self.assertFalse(result["conditions"]["recent_lows_stable"])
+
+    def test_exit_coverage_rejects_morning_only_bars(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest = root / "manifest.json"
+            manifest.write_text(json.dumps({"targets": [{
+                "selection_date": "2026-01-02", "entry_date": "2026-01-05",
+                "code": "005930", "name": "Samsung",
+            }]}), encoding="utf-8")
+            bars_path = root / "bars" / "2026-01-05" / "005930.csv"
+            bars_path.parent.mkdir(parents=True)
+            with bars_path.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(["timestamp", "code", "open", "high", "low", "close", "volume", "trading_value"])
+                for index in range(12):
+                    writer.writerow([
+                        (datetime(2026, 1, 5, 9) + timedelta(minutes=5 * index)).isoformat(),
+                        "005930", 100, 101, 99, 100, 100, 10000,
+                    ])
+            result = audit_intraday_exit_coverage(
+                [manifest], root / "bars", root / "audit"
+            )
+            self.assertEqual("NOT_READY", result["status"])
+            self.assertEqual(0, result["after_entry_count"])
+            self.assertFalse(result["can_resolve_same_day_target_stop_order"])
+
+    def test_exit_bounds_choose_opposite_sides_when_both_hit(self):
+        from types import SimpleNamespace
+        session = datetime(2026, 1, 5)
+        candle = SimpleNamespace(
+            date=session, open=100, high=106, low=89, close=100
+        )
+        candles = {session.date(): candle}
+        pessimistic = _bounded_daily_exit(
+            [session], 0, candles, 100, .05, .10, 1, 101, 99,
+            "PESSIMISTIC",
+        )
+        optimistic = _bounded_daily_exit(
+            [session], 0, candles, 100, .05, .10, 1, 101, 99,
+            "OPTIMISTIC",
+        )
+        self.assertEqual("BOTH_STOP_FIRST", pessimistic["reason"])
+        self.assertEqual("BOTH_TARGET_FIRST", optimistic["reason"])
+
+    def test_no_progress_exit_closes_on_fifth_session(self):
+        from types import SimpleNamespace
+        sessions = [datetime(2026, 1, 5) + timedelta(days=index) for index in range(5)]
+        candles = {
+            session.date(): SimpleNamespace(
+                date=session, open=100, high=101, low=98, close=99
+            )
+            for session in sessions
+        }
+        result = _no_progress_daily_exit(
+            sessions, 0, candles, 100, .05, .10, 20, 101, 99,
+            progress_rate=.02, checkpoint_sessions=5,
+            count_uncertain_entry_progress=False,
+        )
+        self.assertEqual("NO_PROGRESS_EXIT", result["reason"])
+        self.assertEqual(5, result["holding_sessions"])
+        self.assertEqual(99, result["price"])
+
+    def test_no_progress_exit_preserves_trade_after_two_percent_progress(self):
+        from types import SimpleNamespace
+        sessions = [datetime(2026, 1, 5) + timedelta(days=index) for index in range(6)]
+        candles = {}
+        for index, session in enumerate(sessions):
+            candles[session.date()] = SimpleNamespace(
+                date=session, open=100,
+                high=103 if index == 1 else 101,
+                low=98, close=99 if index == 4 else 100,
+            )
+        result = _no_progress_daily_exit(
+            sessions, 0, candles, 100, .05, .10, 6, 101, 99,
+            progress_rate=.02, checkpoint_sessions=5,
+            count_uncertain_entry_progress=False,
+        )
+        self.assertEqual("MAX_HOLD", result["reason"])
+        self.assertTrue(result["progress_hit"])
 
 
 if __name__ == "__main__":

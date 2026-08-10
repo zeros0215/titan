@@ -5,6 +5,8 @@ import json
 import os
 import httpx
 import sqlite3
+import hashlib
+from dataclasses import replace
 from datetime import date, datetime
 from pathlib import Path
 
@@ -53,6 +55,31 @@ from analysis.morning_entry import (
     build_collection_manifest,
     evaluate_morning_bars,
 )
+from research.strategy_search import (
+    generate_bounded_candidates,
+    rank_walk_forward_results,
+    render_ranking_markdown,
+    save_candidate_grid,
+    representative_candidates,
+)
+from research.portfolio_evaluation import (
+    save_challenger_robustness_report,
+    save_portfolio_report,
+)
+from research.challenger_freeze import save_challenger_freeze
+from research.stress_diagnostics import save_stress_diagnostics
+from research.shadow_portfolio import (
+    replay_shadow_month,
+    replay_weekday_sensitivity,
+    run_shadow_portfolio,
+    save_weekly_snapshot,
+)
+from research.monthly_relative_strength import run_monthly_relative_strength
+from research.adaptive_momentum import run_adaptive_momentum
+from research.research_scorecard import save_research_scorecard
+from research.holding_horizon import save_holding_horizon_report
+from research.ac_exit_comparison import save_ac_exit_comparison
+from research.ac_audit import save_ac_audit
 
 
 def banner() -> None:
@@ -179,6 +206,198 @@ def build_parser() -> argparse.ArgumentParser:
     approve.add_argument("--version", required=True)
     approve.add_argument("--actor", required=True)
     approve.add_argument("--note", required=True)
+    research_generate = commands.add_parser(
+        "strategy-research-generate",
+        help="generate bounded offline strategy candidate configs",
+    )
+    research_generate.add_argument(
+        "--output-dir", type=Path,
+        default=Path("output/strategy_research/candidates"),
+    )
+    research_rank = commands.add_parser(
+        "strategy-research-rank",
+        help="rank existing walk-forward results without changing strategy",
+    )
+    research_rank.add_argument("--results-dir", required=True, type=Path)
+    research_rank.add_argument("--minimum-trades", type=int, default=100)
+    research_rank.add_argument(
+        "--objective", choices=("absolute", "excess"), default="absolute",
+        help="rank by cost-adjusted net return (default) or market excess return",
+    )
+    research_rank.add_argument(
+        "--output", type=Path,
+        default=Path("output/strategy_research/ranking.md"),
+    )
+    research_run = commands.add_parser(
+        "strategy-research-run",
+        help="run five representative research candidates out of sample",
+    )
+    research_run.add_argument("--history-start-year", type=int, default=2022)
+    research_run.add_argument("--first-test-year", type=int, default=2023)
+    research_run.add_argument("--last-test-year", type=int, default=2025)
+    research_run.add_argument(
+        "--active-data", type=Path,
+        default=OUTPUT_DIR / "release" / "backtest_data.json",
+        help="isolated promoted data manifest used only by this research run",
+    )
+    research_run.add_argument("--holding-days", type=int, default=20)
+    research_run.add_argument("--interval-months", type=int, default=1)
+    research_run.add_argument("--weekly", action="store_true")
+    research_run.add_argument(
+        "--regime-experiment", action="store_true",
+        help="run the three S78 weekly research-only regime filters",
+    )
+    research_run.add_argument(
+        "--entry-experiment", action="store_true",
+        help="run the S78 B-filter breakout-confirmation candidate",
+    )
+    research_run.add_argument(
+        "--breakout-credit-experiment", action="store_true",
+        help="run S78 B-filter candidates with bounded breakout threshold credit",
+    )
+    research_run.add_argument(
+        "--challenger-experiment", action="store_true",
+        help="compare breakout, pullback, and industry-RS research challengers",
+    )
+    research_run.add_argument(
+        "--event-breakout-experiment", action="store_true",
+        help="run daily first volume-confirmed breakout candidate G",
+    )
+    research_run.add_argument(
+        "--candidate", action="append", default=[],
+        help="run only the named research id; may be repeated",
+    )
+    shadow_run = commands.add_parser(
+        "strategy-shadow-run",
+        help="run the frozen A/C portfolio without placing orders",
+    )
+    shadow_run.add_argument("--date", type=datetime.fromisoformat)
+    shadow_run.add_argument(
+        "--active-data", type=Path,
+        default=OUTPUT_DIR / "release" / "backtest_data.json",
+    )
+    shadow_run.add_argument(
+        "--freeze", type=Path,
+        default=OUTPUT_DIR / "strategy_research" /
+        "research_ac43_portfolio_v1.json",
+    )
+    shadow_run.add_argument(
+        "--state", type=Path,
+        default=OUTPUT_DIR / "strategy_shadow" / "ac43_state.json",
+    )
+    shadow_replay = commands.add_parser(
+        "strategy-shadow-replay",
+        help="replay a historical month into an isolated A/C shadow state",
+    )
+    shadow_replay.add_argument("--month", required=True)
+    shadow_replay.add_argument(
+        "--cadence", choices=("weekly", "daily"), default="weekly",
+    )
+    shadow_replay.add_argument(
+        "--active-data", type=Path,
+        default=OUTPUT_DIR / "release" / "backtest_data.json",
+    )
+    shadow_replay.add_argument(
+        "--freeze", type=Path,
+        default=OUTPUT_DIR / "strategy_research" /
+        "research_ac43_portfolio_v1.json",
+    )
+    shadow_replay.add_argument("--state", type=Path)
+    weekday_test = commands.add_parser(
+        "strategy-shadow-weekday-test",
+        help="compare frozen A/C signals across exact weekdays",
+    )
+    weekday_test.add_argument("--start-month", required=True)
+    weekday_test.add_argument("--end-month", required=True)
+    weekday_test.add_argument(
+        "--active-data", type=Path,
+        default=OUTPUT_DIR / "release" / "backtest_data.json",
+    )
+    weekday_test.add_argument(
+        "--freeze", type=Path,
+        default=OUTPUT_DIR / "strategy_research" /
+        "research_ac43_portfolio_v1.json",
+    )
+    weekday_test.add_argument(
+        "--output-dir", type=Path,
+        default=OUTPUT_DIR / "strategy_shadow" / "weekday_tests",
+    )
+    monthly_rs = commands.add_parser(
+        "strategy-monthly-rs-test",
+        help="test research-only monthly relative-strength/low-volatility strategy",
+    )
+    monthly_rs.add_argument(
+        "--active-data", type=Path,
+        default=OUTPUT_DIR / "release" / "backtest_data.json",
+    )
+    monthly_rs.add_argument("--start-year", type=int, default=2021)
+    monthly_rs.add_argument("--end-date", type=date.fromisoformat)
+    monthly_rs.add_argument(
+        "--defensive", action="store_true",
+        help="apply the pre-registered I-2 dual-horizon gate and close stop",
+    )
+    monthly_rs.add_argument(
+        "--output-dir", type=Path,
+        default=OUTPUT_DIR / "strategy_research",
+    )
+    adaptive_momentum = commands.add_parser(
+        "strategy-adaptive-momentum-test",
+        help="test research-only semi-monthly adaptive momentum strategy J",
+    )
+    adaptive_momentum.add_argument(
+        "--active-data", type=Path,
+        default=OUTPUT_DIR / "release" / "backtest_data.json",
+    )
+    adaptive_momentum.add_argument("--start-year", type=int, default=2021)
+    adaptive_momentum.add_argument("--end-date", type=date.fromisoformat)
+    adaptive_momentum.add_argument(
+        "--output-dir", type=Path, default=OUTPUT_DIR / "strategy_research",
+    )
+    scorecard = commands.add_parser(
+        "strategy-research-scorecard",
+        help="build a unified keep/observe/stop research decision table",
+    )
+    scorecard.add_argument(
+        "--research-dir", type=Path, default=OUTPUT_DIR / "strategy_research",
+    )
+    horizon_test = commands.add_parser(
+        "strategy-ac-horizon-test",
+        help="compare frozen A/C signals at 10, 20, 40, and 60 sessions",
+    )
+    horizon_test.add_argument(
+        "--active-data", type=Path,
+        default=OUTPUT_DIR / "release" / "backtest_data.json",
+    )
+    horizon_test.add_argument(
+        "--artifact-root", type=Path,
+        default=OUTPUT_DIR / "walk_forward" / "artifacts",
+    )
+    horizon_test.add_argument(
+        "--output", type=Path,
+        default=OUTPUT_DIR / "strategy_research" / "ac_holding_horizons.md",
+    )
+    exit_test = commands.add_parser(
+        "strategy-ac-exit-test",
+        help="compare fixed 40-day and alternative A4/C3 exit rules",
+    )
+    exit_test.add_argument("--active-data", type=Path, default=OUTPUT_DIR / "release" / "backtest_data.json")
+    exit_test.add_argument("--artifact-root", type=Path, default=OUTPUT_DIR / "walk_forward" / "artifacts")
+    exit_test.add_argument("--output", type=Path, default=OUTPUT_DIR / "strategy_research" / "ac_exit_comparison.md")
+    ac_audit = commands.add_parser(
+        "strategy-ac-audit",
+        help="audit A4/C3 data, mechanics, robustness, and promotion gates",
+    )
+    ac_audit.add_argument(
+        "--active-data", type=Path,
+        default=OUTPUT_DIR / "release" / "backtest_data.json",
+    )
+    ac_audit.add_argument(
+        "--artifact-root", type=Path,
+        default=OUTPUT_DIR / "walk_forward" / "artifacts",
+    )
+    ac_audit.add_argument(
+        "--output-dir", type=Path, default=OUTPUT_DIR / "strategy_research",
+    )
     universe = commands.add_parser(
         "universe-compile",
         help="validate and compile point-in-time universe history",
@@ -709,6 +928,437 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Report: {report_path}")
         return 0
 
+    if args.command == "strategy-research-generate":
+        candidates = generate_bounded_candidates()
+        manifest = save_candidate_grid(args.output_dir, candidates)
+        print(f"Generated {len(candidates)} research-only candidates")
+        print(f"Manifest: {manifest}")
+        print("Operational strategy: unchanged")
+        return 0
+
+    if args.command == "strategy-research-rank":
+        if args.minimum_trades <= 0:
+            print("Strategy research ranking failed: minimum trades must be positive")
+            return 2
+        paths = sorted(args.results_dir.glob("walk_forward_result_*.json"))
+        rows = rank_walk_forward_results(
+            paths, args.minimum_trades, objective_kind=args.objective,
+        )
+        report = render_ranking_markdown(rows)
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(report, encoding="utf-8")
+        print(report, end="")
+        print(f"Report: {args.output}")
+        print("Operational strategy: unchanged")
+        return 0 if rows else 2
+
+    if args.command == "strategy-research-run":
+        plan = WalkForwardPlan.expanding_years(
+            args.history_start_year, args.first_test_year, args.last_test_year,
+        )
+        candidates = representative_candidates(generate_bounded_candidates())
+        research_data = json.loads(args.active_data.read_text(encoding="utf-8"))
+        price_manifest = json.loads(
+            (Path(research_data["price_dir"]) / "price_history_manifest.json")
+            .read_text(encoding="utf-8")
+        )
+        data_start_year = date.fromisoformat(
+            price_manifest["coverage_start"]
+        ).year
+        coverage_end = datetime.combine(
+            date.fromisoformat(price_manifest["coverage_end"]),
+            datetime.max.time(),
+        )
+        plan = WalkForwardPlan([
+            replace(fold, test_end=min(fold.test_end, coverage_end))
+            for fold in plan.folds
+            if fold.test_start <= coverage_end
+        ])
+        research_top_n = 7
+        research_interval_days = None
+        if args.event_breakout_experiment:
+            base = next(
+                item for item in candidates
+                if item["research_id"] == "s78-m55-mom12-t35-r10"
+            )
+            candidates = [{
+                "research_id": "event-g-first-volume-breakout-h40",
+                "config": {
+                    **base["config"],
+                    "research_market_filter": "exclude_short_slowdown",
+                    "research_entry_filter": "first_volume_breakout20",
+                },
+                "holding_days": 40,
+            }]
+            research_top_n = 2
+            research_interval_days = 1
+        if args.challenger_experiment:
+            base = next(
+                item for item in candidates
+                if item["research_id"] == "s78-m55-mom12-t35-r10"
+            )
+            shared = {
+                **base["config"],
+                "research_market_filter": "exclude_short_slowdown",
+            }
+            candidates = [
+                {
+                    "research_id": "challenger-a-breakout-h40",
+                    "config": {
+                        **shared,
+                        "research_entry_filter": "new_high_or_breakout20",
+                    },
+                    "holding_days": 40,
+                },
+                {
+                    "research_id": "challenger-b-pullback-h20",
+                    "config": {
+                        **shared,
+                        "research_entry_filter": "recent_breakout_pullback",
+                    },
+                    "holding_days": 20,
+                },
+                {
+                    "research_id": "challenger-c-pullback-h40",
+                    "config": {
+                        **shared,
+                        "research_entry_filter": "recent_breakout_pullback",
+                    },
+                    "holding_days": 40,
+                },
+                {
+                    "research_id": "challenger-d-industry-pullback-h40",
+                    "config": {
+                        **shared,
+                        "research_entry_filter": "recent_breakout_pullback",
+                        "research_peer_filter": "strong_industry_top30",
+                    },
+                    "holding_days": 40,
+                },
+                {
+                    "research_id": "challenger-e-confirmed-pullback-h40",
+                    "config": {
+                        **shared,
+                        "research_entry_filter": "confirmed_breakout_pullback",
+                    },
+                    "holding_days": 40,
+                },
+                {
+                    "research_id": "challenger-f-volume-pullback-h40",
+                    "config": {
+                        **shared,
+                        "research_entry_filter": "volume_confirmed_breakout_pullback",
+                    },
+                    "holding_days": 40,
+                },
+            ]
+            research_top_n = 3
+            args.weekly = True
+            freeze_path = save_challenger_freeze(
+                candidates,
+                OUTPUT_DIR / "strategy_research" /
+                "research_ac43_portfolio_v1.json",
+            )
+            print(f"Frozen research specification: {freeze_path}")
+        if args.breakout_credit_experiment:
+            base = next(
+                item for item in candidates
+                if item["research_id"] == "s78-m55-mom12-t35-r10"
+            )
+            candidates = [{
+                "research_id": f"s78-m55-mom12-t35-r10-f-credit{credit}",
+                "config": {
+                    **base["config"],
+                    "research_market_filter": "exclude_short_slowdown",
+                    "research_breakout_threshold_credit": credit,
+                },
+            } for credit in (3, 5)]
+            args.weekly = True
+        if args.entry_experiment:
+            base = next(
+                item for item in candidates
+                if item["research_id"] == "s78-m55-mom12-t35-r10"
+            )
+            candidates = [{
+                "research_id": (
+                    "s78-m55-mom12-t35-r10-e-breakout-"
+                    f"h{args.holding_days}"
+                ),
+                "config": {
+                    **base["config"],
+                    "research_market_filter": "exclude_short_slowdown",
+                    "research_entry_filter": "new_high_or_breakout20",
+                },
+            }]
+            research_top_n = 3
+            args.weekly = True
+        if args.regime_experiment:
+            base = next(
+                item for item in candidates
+                if item["research_id"] == "s78-m55-mom12-t35-r10"
+            )
+            candidates = []
+            for suffix, mode in (
+                ("b-no-slowdown", "exclude_short_slowdown"),
+                ("c-strong-continuation", "strong_continuation"),
+                ("d-continuation-mom20", "continuation_momentum20"),
+            ):
+                candidates.append({
+                    "research_id": f"s78-m55-mom12-t35-r10-{suffix}",
+                    "config": {
+                        **base["config"], "research_market_filter": mode,
+                    },
+                })
+            args.weekly = True
+        if args.candidate:
+            requested = set(args.candidate)
+            candidates = [
+                item for item in candidates if item["research_id"] in requested
+            ]
+            missing = requested - {item["research_id"] for item in candidates}
+            if missing:
+                print(
+                    "Strategy research run failed: unknown representative "
+                    f"candidate(s): {', '.join(sorted(missing))}"
+                )
+                return 2
+        elif (
+            args.weekly
+            and not args.regime_experiment
+            and not args.entry_experiment
+            and not args.breakout_credit_experiment
+            and not args.challenger_experiment
+            and not args.event_breakout_experiment
+        ):
+            candidates = [item for item in candidates if item["research_id"] in (
+                "s78-m55-mom12-t35-r10",
+                "s80-m60-mom10-t30-r15",
+                "s80-m60-mom10-t25-r20",
+            )]
+        for candidate in candidates:
+            config = candidate["config"]
+            criteria = SelectionCriteria(**config)
+            _validate_candidate_criteria(criteria)
+            config_hash = hashlib.sha256(json.dumps(
+                config, sort_keys=True, separators=(",", ":"),
+            ).encode("utf-8")).hexdigest()
+            research_version = (
+                f"research-{candidate['research_id']}-weekly"
+                if args.weekly else f"research-{candidate['research_id']}"
+            )
+            if args.active_data.resolve() != (
+                OUTPUT_DIR / "release" / "backtest_data.json"
+            ).resolve():
+                research_version += f"-hist{data_start_year}"
+            engine = create_walk_forward_engine(
+                strategy_version=research_version,
+                criteria=criteria,
+                strategy_config_hash=config_hash,
+                active_data_path=args.active_data,
+            )
+            result = engine.run(
+                plan,
+                holding_days=candidate.get("holding_days", args.holding_days),
+                interval_months=args.interval_months,
+                top_n=research_top_n,
+                interval_days=(
+                    research_interval_days
+                    if research_interval_days is not None
+                    else 7 if args.weekly else None
+                ),
+            )
+            path = container.walk_forward_repository.save(result)
+            print(f"Completed {candidate['research_id']}: {path}")
+        if args.challenger_experiment:
+            artifact_dirs = sorted(
+                (OUTPUT_DIR / "walk_forward" / "artifacts").glob(
+                    "research-challenger-*-weekly"
+                )
+            )
+            portfolio_path = save_portfolio_report(
+                artifact_dirs,
+                OUTPUT_DIR / "strategy_research" /
+                "challenger_portfolio.md",
+            )
+            print(f"Portfolio report: {portfolio_path}")
+            artifact_root = OUTPUT_DIR / "walk_forward" / "artifacts"
+            suffix = f"-hist{data_start_year}" if data_start_year < 2022 else ""
+            a_dir = artifact_root / (
+                "research-challenger-a-breakout-h40-weekly" + suffix
+            )
+            c_dir = artifact_root / (
+                "research-challenger-c-pullback-h40-weekly" + suffix
+            )
+            if a_dir.exists() and c_dir.exists():
+                robustness_path = save_challenger_robustness_report(
+                    a_dir, c_dir,
+                    OUTPUT_DIR / "strategy_research" /
+                    ("challenger_robustness" + suffix + ".md"),
+                )
+                print(f"Robustness report: {robustness_path}")
+                diagnostics_path = save_stress_diagnostics(
+                    {"A stable breakout": a_dir, "C post-breakout hold": c_dir},
+                    OUTPUT_DIR / "strategy_research" /
+                    ("challenger_stress_diagnostics" + suffix + ".md"),
+                )
+                print(f"Stress diagnostics: {diagnostics_path}")
+        if args.event_breakout_experiment:
+            artifact_dir = (
+                OUTPUT_DIR / "walk_forward" / "artifacts" /
+                "research-event-g-first-volume-breakout-h40"
+            )
+            event_report = save_portfolio_report(
+                [artifact_dir],
+                OUTPUT_DIR / "strategy_research" /
+                "event_g_portfolio.md",
+            )
+            print(f"Event G portfolio report: {event_report}")
+        print("Operational strategy: unchanged")
+        return 0
+
+    if args.command == "strategy-shadow-run":
+        try:
+            as_of = args.date or datetime.now()
+            state = run_shadow_portfolio(
+                as_of, args.active_data, args.freeze, args.state,
+            )
+            snapshot = save_weekly_snapshot(
+                state, OUTPUT_DIR / "strategy_shadow" / "weekly_snapshots",
+            )
+        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+            print(f"Strategy shadow run failed: {error}")
+            return 2
+        print(json.dumps(state["summary"], ensure_ascii=False, indent=2))
+        print(f"State: {args.state}")
+        print(f"Weekly snapshot: {snapshot['markdown_path']}")
+        print("Operational orders: 0")
+        return 0
+
+    if args.command == "strategy-monthly-rs-test":
+        try:
+            result = run_monthly_relative_strength(
+                args.active_data, args.output_dir, args.start_year, args.end_date,
+                args.defensive,
+            )
+        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+            print(f"Monthly relative-strength test failed: {error}")
+            return 2
+        print(json.dumps(result["summary"], ensure_ascii=False, indent=2))
+        print(f"Report: {result['markdown_path']}")
+        print("Operational strategy: unchanged; operational orders: 0")
+        return 0
+
+    if args.command == "strategy-adaptive-momentum-test":
+        try:
+            result = run_adaptive_momentum(
+                args.active_data, args.output_dir, args.start_year, args.end_date,
+            )
+        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+            print(f"Adaptive momentum test failed: {error}")
+            return 2
+        print(json.dumps(result["summary"], ensure_ascii=False, indent=2))
+        print(f"Report: {result['markdown_path']}")
+        print("Operational strategy: unchanged; operational orders: 0")
+        return 0
+
+    if args.command == "strategy-research-scorecard":
+        try:
+            path = save_research_scorecard(args.research_dir)
+        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+            print(f"Research scorecard failed: {error}")
+            return 2
+        print(f"Scorecard: {path}")
+        print("Operational strategy: unchanged; operational orders: 0")
+        return 0
+
+    if args.command == "strategy-ac-horizon-test":
+        suffix = "-hist2020" if "data_extensions" in str(args.active_data) else ""
+        try:
+            result = save_holding_horizon_report(
+                args.active_data,
+                {
+                    "A": args.artifact_root / ("research-challenger-a-breakout-h40-weekly" + suffix),
+                    "C": args.artifact_root / ("research-challenger-c-pullback-h40-weekly" + suffix),
+                },
+                args.output,
+            )
+        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+            print(f"A/C horizon test failed: {error}")
+            return 2
+        print(f"Report: {result['markdown_path']}")
+        print("Operational strategy: unchanged; operational orders: 0")
+        return 0
+
+    if args.command == "strategy-ac-exit-test":
+        suffix = "-hist2020" if "data_extensions" in str(args.active_data) else ""
+        try:
+            result = save_ac_exit_comparison(args.active_data, {
+                "A": args.artifact_root / ("research-challenger-a-breakout-h40-weekly" + suffix),
+                "C": args.artifact_root / ("research-challenger-c-pullback-h40-weekly" + suffix),
+            }, args.output)
+        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+            print(f"A/C exit test failed: {error}")
+            return 2
+        print(f"Report: {result['markdown_path']}")
+        print("Operational strategy: unchanged; operational orders: 0")
+        return 0
+
+    if args.command == "strategy-ac-audit":
+        suffix = "-hist2020" if "data_extensions" in str(args.active_data) else ""
+        weekday_files = sorted(
+            (OUTPUT_DIR / "strategy_shadow" / "weekday_tests").glob("*-summary.json")
+        )
+        weekday_path = weekday_files[-1] if weekday_files else Path("missing.json")
+        try:
+            result = save_ac_audit(
+                args.active_data,
+                {
+                    "A": args.artifact_root / ("research-challenger-a-breakout-h40-weekly" + suffix),
+                    "C": args.artifact_root / ("research-challenger-c-pullback-h40-weekly" + suffix),
+                },
+                OUTPUT_DIR / "strategy_shadow" / "ac43_state.json",
+                weekday_path,
+                args.output_dir,
+            )
+        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+            print(f"A/C audit failed: {error}")
+            return 2
+        print(f"Verdict: {result['verdict']}")
+        print(f"Report: {result['markdown_path']}")
+        print("Operational strategy: unchanged; operational orders: 0")
+        return 0
+
+    if args.command == "strategy-shadow-replay":
+        try:
+            state_path = args.state or (
+                OUTPUT_DIR / "strategy_shadow" / "replays" /
+                f"{args.month}-{args.cadence}.json"
+            )
+            state = replay_shadow_month(
+                args.month, args.cadence, args.active_data,
+                args.freeze, state_path,
+            )
+        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+            print(f"Strategy shadow replay failed: {error}")
+            return 2
+        print(json.dumps(state["summary"], ensure_ascii=False, indent=2))
+        print(f"Replay: {state_path}")
+        print("Operational orders: 0")
+        return 0
+
+    if args.command == "strategy-shadow-weekday-test":
+        try:
+            result = replay_weekday_sensitivity(
+                args.start_month, args.end_month, args.active_data,
+                args.freeze, args.output_dir,
+            )
+        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+            print(f"Strategy weekday test failed: {error}")
+            return 2
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print("Operational orders: 0")
+        return 0
+
     if args.command == "strategy-evaluate":
         try:
             candidate = container.strategy_gate_service.evaluate(
@@ -1088,6 +1738,13 @@ def _validate_candidate_criteria(criteria: SelectionCriteria) -> None:
         raise ValueError("minimum_market_strength must be between 0 and 1")
     if criteria.maximum_momentum_5d <= 0:
         raise ValueError("maximum_momentum_5d must be greater than zero")
+    weights = (
+        criteria.trend_weight, criteria.momentum_weight,
+        criteria.volume_weight, criteria.price_action_weight,
+        criteria.risk_weight, criteria.context_weight,
+    )
+    if any(value < 0 for value in weights) or sum(weights) != 100:
+        raise ValueError("candidate category weights must be non-negative and sum to 100")
 
 
 if __name__ == "__main__":

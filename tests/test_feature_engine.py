@@ -27,6 +27,52 @@ class FeatureEngineTest(unittest.TestCase):
         self.assertEqual(score.price_action_score, 15)
         self.assertGreater(score.risk_score, 0)
 
+    def test_detects_recent_breakout_pullback_without_future_data(self) -> None:
+        series = self._stable_series()
+        for candle in series.candles[:-5]:
+            candle.close = 95.0
+        breakout = series.candles[-5]
+        breakout.open = 100.0
+        breakout.high = 105.0
+        breakout.low = 100.0
+        breakout.close = 105.0
+        breakout.volume = 2_000_000
+        for candle in series.candles[-4:]:
+            candle.open = 103.0
+            candle.high = 104.0
+            candle.low = 102.0
+            candle.close = 103.0
+        series.candles[-1].close = 104.0
+
+        indicators = IndicatorCalculator().calculate(series)
+        features = FeatureEngine().extract(series, indicators)
+
+        self.assertTrue(
+            features.contains(FeatureType.RECENT_BREAKOUT_PULLBACK)
+        )
+        self.assertTrue(
+            features.contains(FeatureType.CONFIRMED_BREAKOUT_PULLBACK)
+        )
+        self.assertTrue(features.contains(
+            FeatureType.VOLUME_CONFIRMED_BREAKOUT_PULLBACK
+        ))
+
+    def test_detects_first_breakout_with_volume_confirmation(self) -> None:
+        series = self._stable_series()
+        for candle in series.candles[:-1]:
+            candle.close = 95.0
+        latest = series.candles[-1]
+        latest.high = 105.0
+        latest.close = 105.0
+        latest.volume = 2_000_000
+
+        indicators = IndicatorCalculator().calculate(series)
+        features = FeatureEngine().extract(series, indicators)
+
+        self.assertTrue(features.contains(
+            FeatureType.FIRST_VOLUME_BREAKOUT_20
+        ))
+
     @staticmethod
     def _stable_series() -> CandleSeries:
         stock = Stock("000001", "Alpha", MarketType.KOSPI)

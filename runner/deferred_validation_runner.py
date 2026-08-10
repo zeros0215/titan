@@ -211,13 +211,16 @@ class DeferredValidationRunner:
         )
         validation = self.validator.validate(backtest, success_return)
         if self.validation_repository is not None:
-            self.validation_repository.save(ValidationRecord(
-                selected_at=selected_at,
-                evaluation_date=evaluation_date,
-                holding_days=holding_days,
-                success_return=success_return,
-                result=validation,
-            ))
+            self.validation_repository.save(
+                ValidationRecord(
+                    selected_at=selected_at,
+                    evaluation_date=evaluation_date,
+                    holding_days=holding_days,
+                    success_return=success_return,
+                    result=validation,
+                ),
+                selection_results=backtest.results,
+            )
 
         return DeferredValidationResult(
             selections=selections,

@@ -46,5 +46,6 @@ class WalkForwardResult:
     strategy_version: str
     holding_days: int
     interval_months: int
+    interval_days: int | None = None
     strategy_frozen: bool = True
     strategy_config_hash: str | None = None
