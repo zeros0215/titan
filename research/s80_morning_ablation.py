@@ -219,6 +219,98 @@ def save_s80_validation_progress(backtest_paths: list[Path], output_dir: Path) -
     return result
 
 
+def save_s80_entry_layer_comparison(
+    backtest_paths: list[Path], output_dir: Path
+) -> dict:
+    """Compare the daily S80 core with strict and relaxed 10:00 overlays."""
+    strategies = {
+        "S80_OPEN": {},
+        "S80_10H": {},
+        "S80_10L": {},
+    }
+    sources = []
+    for path in backtest_paths:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        available = payload.get("trades", [])
+        for row in available:
+            if not row.get("baseline_eligible"):
+                continue
+            key = (row["selection_date"], str(row["code"]).zfill(6))
+            strategies["S80_OPEN"][key] = row.get("baseline_net_return")
+            conditions = row.get("conditions", {})
+            if row.get("qualified") and row.get("morning_net_return") is not None:
+                strategies["S80_10H"][key] = row["morning_net_return"]
+            if (
+                all(conditions.get(name) for name in ("gap_ok", "range_ok", "above_vwap"))
+                and row.get("morning_net_return") is not None
+            ):
+                strategies["S80_10L"][key] = row["morning_net_return"]
+        sources.append({
+            "path": str(path),
+            "available": int(payload.get("available_count", len(available))),
+            "missing": int(payload.get("missing_count", 0)),
+        })
+
+    summaries = {
+        name: _summary([
+            {"value": value} for value in values.values() if value is not None
+        ], "value")
+        for name, values in strategies.items()
+    }
+    result = {
+        "schema_version": 1,
+        "status": "RESEARCH_ONLY",
+        "strategies": {
+            "S80_OPEN": "next-session open; daily-data validation core",
+            "S80_10H": "10:00 entry; all four frozen morning conditions",
+            "S80_10L": "10:00 entry; recent_lows_stable omitted",
+        },
+        "summaries": summaries,
+        "sources": sources,
+        "limitations": [
+            "S80_OPEN is the long-history core; the 10:00 overlays only use rows with intraday bars.",
+            "Missing intraday bars can create selection bias in S80_10H and S80_10L.",
+            "S80_10L was selected after inspecting historical ablations and requires forward validation.",
+            "No operational rule or order behavior is changed by this report.",
+        ],
+        "operational_rule_changed": False,
+        "operational_orders": 0,
+    }
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "s80_entry_layers.json").write_text(
+        json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    lines = [
+        "# S80 진입 계층 비교", "",
+        "> 일봉 선정 본체와 10시 실행 오버레이를 분리한 연구 보고서입니다. 운영 규칙은 변경하지 않습니다.", "",
+        "|전략|진입|거래|승률|평균 순수익|평균 95% 기술 구간|",
+        "|---|---|---:|---:|---:|---:|",
+    ]
+    labels = {
+        "S80_OPEN": "다음 거래일 시초가",
+        "S80_10H": "10시·4조건",
+        "S80_10L": "10시·최근 저점 조건 제외",
+    }
+    for name in ("S80_OPEN", "S80_10H", "S80_10L"):
+        row = summaries[name]
+        interval = f"{_pct(row['mean_95_ci'][0])} ~ {_pct(row['mean_95_ci'][1])}"
+        lines.append(
+            f"|{name}|{labels[name]}|{row['trades']}|{_pct(row['win_rate'])}|"
+            f"{_pct(row['average_return'])}|{interval}|"
+        )
+    lines += [
+        "", "## 판정 원칙", "",
+        "- S80_OPEN만 장기 일봉 검증의 본체로 사용합니다.",
+        "- S80_10H와 S80_10L은 분봉 보유 기간의 실행 오버레이로만 비교합니다.",
+        "- S80_10L은 과거 결과를 보고 고른 후보이므로 신규 전진 표본 전에는 승격하지 않습니다.",
+        "- 이 보고서는 운영 조건이나 주문을 변경하지 않습니다.", "",
+    ]
+    (output_dir / "s80_entry_layers.md").write_text(
+        "\n".join(lines), encoding="utf-8"
+    )
+    return result
+
+
 def _pct(value) -> str:
     return "—" if value is None else f"{value:.2%}"
 

@@ -261,20 +261,29 @@ def run_morning_entry_backtest(
             "baseline_exit": baseline_exit,
             "baseline_net_return": baseline_net,
         }
+        morning_entry = signal["entry_price"]
+        morning_exit = _daily_exit(
+            sessions, index, candles, morning_entry, profit_target,
+            stop_loss, maximum_holding_sessions, include_entry_day=True,
+            morning_high=signal["morning_high"],
+            morning_low=signal["morning_low"],
+        )
+        row.update({
+            "morning_entry": morning_entry,
+            "morning_exit": morning_exit,
+            "morning_net_return": costs.net_return(
+                morning_entry, morning_exit["price"]
+            ),
+        })
+        # Preserve the frozen S80 field names for existing consumers.  The
+        # generic morning fields above are populated for every available row
+        # so relaxed overlays can be evaluated without substituting open-entry
+        # returns for a 10:00 entry.
         if signal["qualified"]:
-            stable_entry = signal["entry_price"]
-            stable_exit = _daily_exit(
-                sessions, index, candles, stable_entry, profit_target,
-                stop_loss, maximum_holding_sessions, include_entry_day=True,
-                morning_high=signal["morning_high"],
-                morning_low=signal["morning_low"],
-            )
             row.update({
-                "stable_entry": stable_entry,
-                "stable_exit": stable_exit,
-                "stable_net_return": costs.net_return(
-                    stable_entry, stable_exit["price"]
-                ),
+                "stable_entry": morning_entry,
+                "stable_exit": morning_exit,
+                "stable_net_return": row["morning_net_return"],
             })
         trades.append(row)
     baseline_all = [
@@ -286,6 +295,13 @@ def run_morning_entry_backtest(
     ]
     stable = [
         row["stable_net_return"] for row in trades if row["qualified"]
+    ]
+    relaxed = [
+        row["morning_net_return"] for row in trades
+        if row["baseline_eligible"] and all(
+            row["conditions"].get(condition)
+            for condition in ("gap_ok", "range_ok", "above_vwap")
+        )
     ]
     result = {
         "strategy_version": manifest["strategy_version"],
@@ -306,6 +322,9 @@ def run_morning_entry_backtest(
             "BASELINE_ALL": _return_summary(baseline_all),
             "BASELINE_QUALIFIED": _return_summary(baseline_qualified),
             "STABLE_1000": _return_summary(stable),
+            "S80_OPEN": _return_summary(baseline_all),
+            "S80_10H": _return_summary(stable),
+            "S80_10L": _return_summary(relaxed),
         },
         "missing": missing,
         "trades": trades,

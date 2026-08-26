@@ -52,6 +52,8 @@ class DashboardOperationsTest(unittest.TestCase):
         self.assertIn("/api/status", self.template)
         self.assertIn('id="server-task-status"', self.template)
         self.assertIn('id="s80-shadow-trades"', self.template)
+        self.assertIn('id="s80-entry-layers-report"', self.template)
+        self.assertIn("research.s80_entry_layers_report", self.template)
         self.assertIn("D.operational_shadow", self.template)
         self.assertIn("D.observation_shadow", self.template)
         self.assertIn("가정 진입시각", self.template)

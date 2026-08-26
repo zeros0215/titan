@@ -414,6 +414,8 @@ def main() -> None:
     exit_bounds_report = exit_bounds_path.read_text(encoding="utf-8") if exit_bounds_path.exists() else ""
     no_progress_path = ROOT / "output" / "morning_entry" / "no_progress" / "s80_no_progress.md"
     no_progress_report = no_progress_path.read_text(encoding="utf-8") if no_progress_path.exists() else ""
+    entry_layers_path = ROOT / "output" / "morning_entry" / "entry_layers" / "s80_entry_layers.md"
+    entry_layers_report = entry_layers_path.read_text(encoding="utf-8") if entry_layers_path.exists() else ""
     audit_path = ROOT / "output" / "strategy_research" / "ac43_audit.md"
     audit_report = audit_path.read_text(encoding="utf-8") if audit_path.exists() else ""
     data = {
@@ -441,6 +443,7 @@ def main() -> None:
             "intraday_exit_coverage_report": intraday_exit_report,
             "s80_exit_bounds_report": exit_bounds_report,
             "s80_no_progress_report": no_progress_report,
+            "s80_entry_layers_report": entry_layers_report,
             "ac43_audit_report": audit_report,
             "ac43_audit": audit_summary,
         },

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from research.s80_morning_ablation import (
     analyze_s80_morning_filter,
+    save_s80_entry_layer_comparison,
     save_s80_validation_progress,
 )
 
@@ -73,6 +74,45 @@ class S80MorningAblationTest(unittest.TestCase):
             self.assertEqual("COLLECTING", result["status"])
             self.assertEqual(29, result["remaining_to_next_target"])
             self.assertTrue((root / "report" / "s80_validation_progress.md").exists())
+
+    def test_entry_layer_comparison_separates_open_strict_and_relaxed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rows = [
+                {
+                    "selection_date": "2026-01-02", "code": "000001",
+                    "baseline_eligible": True, "qualified": True,
+                    "conditions": {
+                        "gap_ok": True, "range_ok": True,
+                        "above_vwap": True, "recent_lows_stable": True,
+                    },
+                    "baseline_net_return": .01, "morning_net_return": .02,
+                },
+                {
+                    "selection_date": "2026-01-03", "code": "000002",
+                    "baseline_eligible": True, "qualified": False,
+                    "conditions": {
+                        "gap_ok": True, "range_ok": True,
+                        "above_vwap": True, "recent_lows_stable": False,
+                    },
+                    "baseline_net_return": -.01, "morning_net_return": .03,
+                },
+            ]
+            path = root / "backtest.json"
+            path.write_text(json.dumps({
+                "available_count": 2, "missing_count": 0, "trades": rows,
+            }), encoding="utf-8")
+
+            result = save_s80_entry_layer_comparison([path], root / "report")
+
+            self.assertEqual(2, result["summaries"]["S80_OPEN"]["trades"])
+            self.assertEqual(1, result["summaries"]["S80_10H"]["trades"])
+            self.assertEqual(2, result["summaries"]["S80_10L"]["trades"])
+            self.assertAlmostEqual(
+                .025, result["summaries"]["S80_10L"]["average_return"]
+            )
+            self.assertFalse(result["operational_rule_changed"])
+            self.assertTrue((root / "report" / "s80_entry_layers.md").exists())
 
 
 if __name__ == "__main__":
