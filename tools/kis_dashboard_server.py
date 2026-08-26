@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 import subprocess
 import sys
 import threading
@@ -59,6 +60,20 @@ RUN_LOCK = threading.Lock()
 PRICE_LOCK = threading.Lock()
 OPERATIONAL_VERSION = "V1.3-S80-N7-TP5-SL10-CANDIDATE"
 ACTIVE_TASK: dict[str, str] = {}
+
+
+class ExclusiveThreadingHTTPServer(ThreadingHTTPServer):
+    """Prevent multiple Windows dashboard processes from sharing one port."""
+
+    allow_reuse_address = False
+    allow_reuse_port = False
+
+    def server_bind(self) -> None:
+        if os.name == "nt" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(
+                socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1
+            )
+        super().server_bind()
 
 
 class DashboardHandler(BaseHTTPRequestHandler):
@@ -1096,6 +1111,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     "--universe-raw-dir", str(universe_raw),
                     "--price-raw-dir", str(price_raw),
                     "--output-dir", str(price_staging),
+                    "--base-price-dir", str(Path(active["price_dir"])),
                 ],
                 [
                     sys.executable, "-m", "app.main", "backtest-data-promote",
@@ -1255,7 +1271,10 @@ def _save_operational_entry_snapshot(
         run for run in runs
         if run.get("strategy_version") == OPERATIONAL_VERSION
         and run.get("status") == "PASS"
-        and run.get("selected_candidates")
+        and (
+            run.get("selected_candidates")
+            or run.get("observation_candidates")
+        )
     ]
     if not runs:
         return None
@@ -1523,7 +1542,7 @@ def _weekdays_between(start: date, end: date) -> int:
 
 def main() -> None:
     build_dashboard()
-    server = ThreadingHTTPServer((HOST, PORT), DashboardHandler)
+    server = ExclusiveThreadingHTTPServer((HOST, PORT), DashboardHandler)
     url = f"http://{HOST}:{PORT}"
     print(f"TITAN dashboard: {url}")
     print("종료: Ctrl+C")

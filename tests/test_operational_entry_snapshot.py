@@ -67,6 +67,43 @@ class OperationalEntrySnapshotTest(unittest.TestCase):
         )
         self.assertIsNone(result)
 
+    def test_uses_latest_observation_only_run(self) -> None:
+        class ObservationOnlyHistory:
+            def __init__(self, _path):
+                pass
+
+            def load_all(self):
+                older = _History(None).load_all()[0]
+                return [older, {
+                    "run_id": "run-2",
+                    "as_of": "2026-08-11T00:00:00",
+                    "status": "PASS",
+                    "strategy_version": "V1.3-S80-N7-TP5-SL10-CANDIDATE",
+                    "selected_candidates": [],
+                    "observation_candidates": [
+                        {"code": "003690", "name": "코리안리", "total_score": 78},
+                    ],
+                }]
+
+        with tempfile.TemporaryDirectory() as temporary, patch(
+            "tools.kis_dashboard_server.ROOT", Path(temporary)
+        ), patch(
+            "tools.kis_dashboard_server.PilotHistoryRepository",
+            ObservationOnlyHistory,
+        ):
+            result = _save_operational_entry_snapshot(
+                {"003690": {"close": 14490, "change_rate": -0.015}},
+                datetime.fromisoformat("2026-08-12T10:00:05+09:00"),
+            )
+
+            self.assertEqual(1, result["candidate_count"])
+            payload = json.loads(
+                (Path(temporary) / result["path"]).read_text(encoding="utf-8")
+            )
+            self.assertEqual("run-2", payload["source_run_id"])
+            self.assertEqual("003690", payload["candidates"][0]["code"])
+            self.assertEqual("OBSERVATION", payload["candidates"][0]["cohort"])
+
 
 if __name__ == "__main__":
     unittest.main()
