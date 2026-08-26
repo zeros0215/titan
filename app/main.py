@@ -530,6 +530,11 @@ def build_parser() -> argparse.ArgumentParser:
     krx_price_build.add_argument("--universe-raw-dir", required=True, type=Path)
     krx_price_build.add_argument("--price-raw-dir", required=True, type=Path)
     krx_price_build.add_argument("--output-dir", required=True, type=Path)
+    krx_price_build.add_argument(
+        "--base-price-dir",
+        type=Path,
+        help="reuse an active compiled price directory and append new sessions",
+    )
     industry_rs = commands.add_parser(
         "industry-rs-test",
         help="validate stock relative strength against industry peers",
@@ -860,6 +865,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.universe_raw_dir,
                 args.price_raw_dir,
                 args.output_dir,
+                base_price_dir=args.base_price_dir,
             )
         except (OSError, TypeError, ValueError, sqlite3.Error) as error:
             print(f"KRX adjusted price build failed: {error}")

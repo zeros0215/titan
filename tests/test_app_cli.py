@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from pathlib import Path
 import unittest
 from unittest.mock import patch
 
@@ -287,9 +288,11 @@ class AppCliTest(unittest.TestCase):
             "--universe-raw-dir", "output/universe_raw",
             "--price-raw-dir", "output/price_raw",
             "--output-dir", "output/price_staging",
+            "--base-price-dir", "output/active_price",
         ])
 
         self.assertEqual("krx-price-build", args.command)
+        self.assertEqual(Path("output/active_price"), args.base_price_dir)
 
     def test_parses_industry_rs_command(self) -> None:
         args = build_parser().parse_args([
