@@ -421,6 +421,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     krx_build.add_argument("--raw-dir", required=True, type=Path)
     krx_build.add_argument("--output-dir", required=True, type=Path)
+    krx_build.add_argument("--base-universe-dir", type=Path)
     pilot = commands.add_parser(
         "kis-pilot",
         help="run isolated read-only KIS selection on a fixed small universe",
@@ -1504,12 +1505,34 @@ def main(argv: list[str] | None = None) -> int:
             collection_manifest = json.loads(
                 collection_manifest_path.read_text(encoding="utf-8")
             )
-            if (
-                collection_manifest.get("raw_sha256")
-                != raw_repository.content_sha256()
-            ):
+            if collection_manifest.get("raw_hash_mode") == "incremental-v1":
+                actual_raw_hash = raw_repository.content_sha256(
+                    start=date.fromisoformat(collection_manifest["raw_delta_start"]),
+                    seed=collection_manifest["raw_sha256_base"],
+                )
+            else:
+                actual_raw_hash = raw_repository.content_sha256()
+            if collection_manifest.get("raw_sha256") != actual_raw_hash:
                 raise ValueError("raw KRX snapshot hash does not match manifest")
-            records = KrxSnapshotNormalizer().normalize(args.raw_dir)
+            normalizer = KrxSnapshotNormalizer()
+            if args.base_universe_dir is None:
+                records = normalizer.normalize(args.raw_dir)
+            else:
+                base_manifest = json.loads(
+                    (args.base_universe_dir / "universe_manifest.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+                loader = UniverseHistoryLoader()
+                base_records = loader.load(args.base_universe_dir / "kospi.csv")
+                base_records.extend(
+                    loader.load(args.base_universe_dir / "kosdaq.csv")
+                )
+                records = normalizer.normalize_incremental(
+                    args.raw_dir,
+                    base_records,
+                    date.fromisoformat(base_manifest["coverage_end"]),
+                )
             compiler = UniverseHistoryCompiler()
             manifest, validation = compiler.compile(
                 records,

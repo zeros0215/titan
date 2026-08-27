@@ -87,6 +87,111 @@ class KrxSnapshotNormalizer:
             ),
         )
 
+    def normalize_incremental(
+        self,
+        raw_directory: Path,
+        base_records: list[UniverseHistoryRecord],
+        base_coverage_end: date,
+    ) -> list[UniverseHistoryRecord]:
+        """Extend compiled history by reading only snapshots after the base."""
+        paths = [
+            path
+            for path in sorted(raw_directory.glob("????????_*.json"))
+            if self._identity(path)[0] > base_coverage_end
+        ]
+        if not paths:
+            raise ValueError("no new KRX raw snapshots found")
+        available_dates = self._available_dates(paths)
+        if not available_dates:
+            raise ValueError("new KRX raw snapshots contain no listed stocks")
+        date_position = {
+            value: index for index, value in enumerate(available_dates)
+        }
+
+        records = [item for item in base_records if item.effective_to is not None]
+        active = {}
+        for item in base_records:
+            if item.effective_to is None:
+                active[(item.code, item.market.value)] = _Segment(
+                    first_observed=item.effective_from,
+                    last_observed=base_coverage_end,
+                    first_index=-1,
+                    last_index=-1,
+                    name=item.name,
+                    listed=item.effective_from,
+                )
+
+        for path in paths:
+            base_date, market_name = self._identity(path)
+            if base_date not in date_position:
+                continue
+            index = date_position[base_date]
+            for row in self._rows(path):
+                if not self._eligible(row):
+                    continue
+                code = str(row.get("ISU_SRT_CD", "")).strip()
+                if not code:
+                    continue
+                name = str(
+                    row.get("ISU_ABBRV") or row.get("ISU_NM") or code
+                ).strip()
+                listed = self._date(row.get("LIST_DD")) or base_date
+                key = (code, market_name)
+                segment = active.get(key)
+                if segment is not None and index != segment.last_index + 1:
+                    records.append(self._incremental_record(key, segment))
+                    segment = None
+                if segment is None:
+                    active[key] = _Segment(
+                        first_observed=base_date,
+                        last_observed=base_date,
+                        first_index=index,
+                        last_index=index,
+                        name=name,
+                        listed=listed,
+                    )
+                else:
+                    segment.last_observed = base_date
+                    segment.last_index = index
+                    segment.name = name
+
+        latest_date = available_dates[-1]
+        for key, segment in sorted(active.items()):
+            records.append(UniverseHistoryRecord(
+                code=key[0],
+                name=segment.name,
+                market=self.MARKET_BY_FILE[key[1]],
+                effective_from=(
+                    segment.listed
+                    if segment.first_index == -1
+                    else segment.first_observed
+                ),
+                effective_to=(
+                    None
+                    if segment.last_observed == latest_date
+                    else segment.last_observed
+                ),
+                source_id="KRX_OPEN_API_ISSUE_BASE_INFO",
+            ))
+        return sorted(
+            records,
+            key=lambda item: (item.code, item.market.value, item.effective_from),
+        )
+
+    def _incremental_record(self, key, segment):
+        return UniverseHistoryRecord(
+            code=key[0],
+            name=segment.name,
+            market=self.MARKET_BY_FILE[key[1]],
+            effective_from=(
+                segment.listed
+                if segment.first_index == -1
+                else segment.first_observed
+            ),
+            effective_to=segment.last_observed,
+            source_id="KRX_OPEN_API_ISSUE_BASE_INFO",
+        )
+
     def _available_dates(self, paths):
         values = set()
         for path in paths:

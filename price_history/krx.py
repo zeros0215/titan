@@ -70,9 +70,18 @@ class KrxPriceRawRepository:
         )
         return path
 
-    def content_sha256(self) -> str:
+    def content_sha256(
+        self,
+        start: date | None = None,
+        seed: str | None = None,
+    ) -> str:
         digest = hashlib.sha256()
+        if seed is not None:
+            digest.update(b"incremental-v1\0")
+            digest.update(seed.encode("ascii"))
         for path in sorted(self.directory.glob("????????_*.json")):
+            if start is not None and path.name[:8] < start.strftime("%Y%m%d"):
+                continue
             digest.update(path.name.encode())
             digest.update(path.read_bytes())
         return digest.hexdigest()

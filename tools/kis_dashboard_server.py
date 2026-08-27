@@ -84,6 +84,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 "busy": RUN_LOCK.locked(),
                 "task": ACTIVE_TASK.get("task"),
                 "started_at": ACTIVE_TASK.get("started_at"),
+                "progress": ACTIVE_TASK.get("progress"),
             })
             return
         if path not in ("/", "/index.html"):
@@ -648,11 +649,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         provider = KisCurrentPriceProvider()
         try:
             prices = provider.get_prices(codes)
-            snapshot = _save_operational_entry_snapshot(prices)
             self._json(200, {
                 "prices": prices,
-                "entry_snapshot_saved": snapshot is not None,
-                "entry_snapshot": snapshot,
+                "entry_snapshot_saved": False,
             })
         except (
             OSError, TypeError, ValueError, KisApiException, httpx.HTTPError,
@@ -958,6 +957,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not RUN_LOCK.acquire(blocking=False):
             self._json(409, {"message": "다른 테스트가 이미 실행 중입니다."})
             return
+        _set_active_task("HISTORICAL_YEAR_TEST")
         try:
             results = run_year(
                 year,
@@ -968,6 +968,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 entry_mode=entry_mode,
                 entry_limit=entry_limit,
                 entry_minimum=entry_minimum,
+                progress_callback=_set_active_progress,
             )
             build_dashboard()
             self._json(
@@ -979,6 +980,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             self._json(500, {"message": f"연간 테스트 실패: {exc}"})
         finally:
+            _clear_active_task()
             RUN_LOCK.release()
 
     def _run_industry_rs(self) -> None:
@@ -1051,60 +1053,93 @@ class DashboardHandler(BaseHTTPRequestHandler):
             price_staging = staging_root / "price"
             auth_key = os.getenv("KRX_AUTH_KEY", "")
             universe_repository = KrxRawRepository(universe_raw)
-            universe_result = KrxUniverseCollector(
-                KrxUniverseClient(auth_key),
-                universe_repository,
-            ).collect(date(2022, 1, 1), target)
-            universe_repository.save_collection_manifest({
-                "schema_version": 1,
-                "source_name": "KRX Data Marketplace OPEN API",
-                "source_type": "official_daily_snapshots",
-                "dataset_id": "stk_isu_base_info+ksq_isu_base_info",
-                "evidence_url": (
-                    "https://openapi.krx.co.kr/contents/OPP/INFO/"
-                    "service/OPPINFO004.cmd"
-                ),
-                "acquired_at": datetime.now().astimezone().isoformat(),
-                "coverage_start": "2022-01-01",
-                "coverage_end": target.isoformat(),
-                "source_complete": universe_result.completed,
-                "requested_dates": universe_result.requested_dates,
-                "api_calls": universe_result.api_calls,
-                "saved_responses": universe_result.saved_responses,
-                "skipped_cached": universe_result.skipped_cached,
-                "last_date": (
-                    universe_result.last_date.isoformat()
-                    if universe_result.last_date else None
-                ),
-                "raw_sha256": universe_repository.content_sha256(),
-            })
-            price_repository = KrxPriceRawRepository(price_raw)
-            price_result = KrxPriceCollector(
-                KrxPriceClient(auth_key),
-                price_repository,
-            ).collect(date(2022, 1, 1), target)
-            price_manifest = {
-                "schema_version": 1,
-                "source_name": "KRX Data Marketplace OPEN API",
-                "dataset_id": "stk_bydd_trd+ksq_bydd_trd",
-                "coverage_start": "2022-01-01",
-                "coverage_end": target.isoformat(),
-                "completed": price_result.completed,
-                "api_calls": price_result.api_calls,
-                "saved_responses": price_result.saved_responses,
-                "skipped_cached": price_result.skipped_cached,
-                "raw_sha256": price_repository.content_sha256(),
-                "prices_adjusted": False,
-            }
-            (price_raw / "collection_manifest.json").write_text(
-                json.dumps(price_manifest, ensure_ascii=False, indent=2),
-                encoding="utf-8",
+            universe_collection_path = universe_raw / "collection_manifest.json"
+            previous_universe_collection = json.loads(
+                universe_collection_path.read_text(encoding="utf-8")
             )
+            universe_current = date.fromisoformat(
+                previous_universe_collection["coverage_end"]
+            )
+            universe_start = _next_collection_date(universe_current, target)
+            if universe_start is not None:
+                universe_result = KrxUniverseCollector(
+                    KrxUniverseClient(auth_key),
+                    universe_repository,
+                ).collect(universe_start, target)
+                universe_raw_hash = universe_repository.content_sha256(
+                    start=universe_start,
+                    seed=previous_universe_collection["raw_sha256"],
+                )
+                universe_repository.save_collection_manifest({
+                    "schema_version": 1,
+                    "source_name": "KRX Data Marketplace OPEN API",
+                    "source_type": "official_daily_snapshots",
+                    "dataset_id": "stk_isu_base_info+ksq_isu_base_info",
+                    "evidence_url": (
+                        "https://openapi.krx.co.kr/contents/OPP/INFO/"
+                        "service/OPPINFO004.cmd"
+                    ),
+                    "acquired_at": datetime.now().astimezone().isoformat(),
+                    "coverage_start": previous_universe_collection["coverage_start"],
+                    "coverage_end": target.isoformat(),
+                    "source_complete": universe_result.completed,
+                    "requested_dates": universe_result.requested_dates,
+                    "api_calls": universe_result.api_calls,
+                    "saved_responses": universe_result.saved_responses,
+                    "skipped_cached": universe_result.skipped_cached,
+                    "last_date": (
+                        universe_result.last_date.isoformat()
+                        if universe_result.last_date else None
+                    ),
+                    "raw_sha256": universe_raw_hash,
+                    "raw_hash_mode": "incremental-v1",
+                    "raw_sha256_base": previous_universe_collection["raw_sha256"],
+                    "raw_delta_start": universe_start.isoformat(),
+                })
+            price_repository = KrxPriceRawRepository(price_raw)
+            price_collection_path = price_raw / "collection_manifest.json"
+            previous_price_collection = json.loads(
+                price_collection_path.read_text(encoding="utf-8")
+            )
+            price_current = date.fromisoformat(
+                previous_price_collection["coverage_end"]
+            )
+            price_start = _next_collection_date(price_current, target)
+            if price_start is not None:
+                price_result = KrxPriceCollector(
+                    KrxPriceClient(auth_key),
+                    price_repository,
+                ).collect(price_start, target)
+                price_raw_hash = price_repository.content_sha256(
+                    start=price_start,
+                    seed=previous_price_collection["raw_sha256"],
+                )
+                price_manifest = {
+                    "schema_version": 1,
+                    "source_name": "KRX Data Marketplace OPEN API",
+                    "dataset_id": "stk_bydd_trd+ksq_bydd_trd",
+                    "coverage_start": previous_price_collection["coverage_start"],
+                    "coverage_end": target.isoformat(),
+                    "completed": price_result.completed,
+                    "api_calls": price_result.api_calls,
+                    "saved_responses": price_result.saved_responses,
+                    "skipped_cached": price_result.skipped_cached,
+                    "raw_sha256": price_raw_hash,
+                    "raw_hash_mode": "incremental-v1",
+                    "raw_sha256_base": previous_price_collection["raw_sha256"],
+                    "raw_delta_start": price_start.isoformat(),
+                    "prices_adjusted": False,
+                }
+                (price_raw / "collection_manifest.json").write_text(
+                    json.dumps(price_manifest, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
             commands = [
                 [
                     sys.executable, "-m", "app.main", "krx-universe-build",
                     "--raw-dir", str(universe_raw),
                     "--output-dir", str(universe_staging),
+                    "--base-universe-dir", str(Path(active["universe_dir"])),
                 ],
                 [
                     sys.executable, "-m", "app.main", "krx-price-build",
@@ -1255,6 +1290,10 @@ def _set_active_task(task: str) -> None:
 
 def _clear_active_task() -> None:
     ACTIVE_TASK.clear()
+
+
+def _set_active_progress(completed: int, total: int) -> None:
+    ACTIVE_TASK["progress"] = round(completed / total * 100) if total else 100
 
 
 def _save_operational_entry_snapshot(
@@ -1538,6 +1577,11 @@ def _weekdays_between(start: date, end: date) -> int:
         count += current.weekday() < 5
         current += timedelta(days=1)
     return count
+
+
+def _next_collection_date(current: date, target: date) -> date | None:
+    """Return the next missing date, or None when this source is current."""
+    return current + timedelta(days=1) if current < target else None
 
 
 def main() -> None:

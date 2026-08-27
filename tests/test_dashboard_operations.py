@@ -28,6 +28,14 @@ class DashboardOperationsTest(unittest.TestCase):
             self.template,
         )
         self.assertIn('id="positions"', self.template)
+        self.assertIn(
+            '<article class="card full"><h2>매수 선정 종목</h2>',
+            self.template,
+        )
+        self.assertIn(
+            '<article class="card full"><h2>관찰 종목</h2>',
+            self.template,
+        )
         self.assertIn("/api/current-prices", self.template)
         self.assertIn("/api/news-headlines", self.template)
         self.assertIn("/api/run-event-candidates", self.template)
@@ -48,17 +56,39 @@ class DashboardOperationsTest(unittest.TestCase):
         self.assertIn("기사 본문이나 자동 매수 판단 없이", self.template)
         self.assertIn("setInterval(refreshOperationalPrices,60000)", self.template)
         self.assertIn('id="breadth-up-rate"', self.template)
-        self.assertIn("result.entry_snapshot_saved", self.template)
+        self.assertIn('<span class="runner-break" aria-hidden="true"></span><label>대상 월', self.template)
+        self.assertNotIn("result.entry_snapshot_saved", self.template)
         self.assertIn("/api/status", self.template)
+        self.assertIn("진행률: ${status.progress}%", self.template)
         self.assertIn('id="server-task-status"', self.template)
-        self.assertIn('id="s80-shadow-trades"', self.template)
-        self.assertIn('id="s80-entry-layers-report"', self.template)
-        self.assertIn("research.s80_entry_layers_report", self.template)
-        self.assertIn("D.operational_shadow", self.template)
-        self.assertIn("D.observation_shadow", self.template)
-        self.assertIn("가정 진입시각", self.template)
-        self.assertIn("가정 수익률", self.template)
-        self.assertIn('data-tab="research-panel"', self.template)
+        self.assertNotIn('id="s80-shadow-trades"', self.template)
+        self.assertNotIn('id="s80-entry-layers-report"', self.template)
+        self.assertNotIn('id="intraday-exit-coverage-report"', self.template)
+        self.assertNotIn('id="s80-exit-bounds-report"', self.template)
+        self.assertNotIn('id="s80-no-progress-report"', self.template)
+        self.assertNotIn("D.strategy_research", self.template)
+        self.assertNotIn("D.operational_shadow", self.template)
+        self.assertNotIn("D.observation_shadow", self.template)
+        self.assertIn("시가 갭", self.template)
+        self.assertIn("진입 조건 충족", self.template)
+        self.assertIn("가정 진입일", self.template)
+        self.assertIn("가정 진입 시가", self.template)
+        self.assertIn("시가 기준 예상 수익률", self.template)
+        self.assertIn("Number(p.close)/openPrice-1", self.template)
+        self.assertIn("function entryDateLabel(value)", self.template)
+        self.assertIn("D.selection_entry_prices", self.template)
+        self.assertIn("function applyStoredEntryPrices(items)", self.template)
+        self.assertIn("titan-operational-prices", self.template)
+        self.assertIn("validCachedOperationalPrices", self.template)
+        self.assertIn("window.__operationalPrices=operationalPrices", self.template)
+        self.assertIn("row.children[10].textContent='평가 대기'", self.template)
+        self.assertIn("renderHistoricalPeriod(currentHistoricalPeriod())", self.template)
+        self.assertIn("function removeMarketRelativeColumn(container)", self.template)
+        self.assertIn("row.children[12]?.remove()", self.template)
+        self.assertNotIn("매수가 (관찰군 가정)", self.template)
+        self.assertNotIn("매도가 (관찰군 가정)", self.template)
+        self.assertNotIn("관찰 (가정 거래)", self.template)
+        self.assertNotIn('data-tab="research-panel"', self.template)
         self.assertNotIn('data-tab="next-day-panel"', self.template)
         self.assertNotIn('id="next-day-verdict"', self.template)
         self.assertNotIn('id="next-day-forecast"', self.template)
@@ -67,21 +97,17 @@ class DashboardOperationsTest(unittest.TestCase):
         self.assertNotIn('id="research-run"', self.template)
         self.assertNotIn('id="research-weekly"', self.template)
         self.assertNotIn('id="research-challengers"', self.template)
-        self.assertIn('id="challenger-robustness"', self.template)
-        self.assertIn('id="challenger-stress"', self.template)
-        self.assertIn('id="shadow-replay-month"', self.template)
-        self.assertIn('id="shadow-replay-run"', self.template)
-        self.assertIn('id="weekday-run"', self.template)
-        self.assertIn('id="weekday-results"', self.template)
+        self.assertNotIn('id="ac-overview-run"', self.template)
+        self.assertNotIn('id="shadow-run"', self.template)
+        self.assertNotIn('id="shadow-replay-run"', self.template)
+        self.assertNotIn('id="weekday-run"', self.template)
         self.assertNotIn('id="event-g-report"', self.template)
         self.assertNotIn('id="monthly-rs-report"', self.template)
         self.assertNotIn('id="adaptive-momentum-report"', self.template)
-        self.assertIn("/api/research-shadow-run", self.template)
-        self.assertIn("async function runAcWeekly()", self.template)
-        self.assertIn("acRunButtons.forEach(button=>button.addEventListener('click',runAcWeekly))", self.template)
-        self.assertIn("대시보드 서버로 열어야 실행할 수 있습니다", self.template)
-        self.assertIn("/api/research-shadow-replay", self.template)
-        self.assertIn("/api/research-shadow-weekday", self.template)
+        self.assertNotIn("/api/research-shadow-run", self.template)
+        self.assertNotIn("async function runAcWeekly()", self.template)
+        self.assertNotIn("/api/research-shadow-replay", self.template)
+        self.assertNotIn("/api/research-shadow-weekday", self.template)
         self.assertLess(
             self.template.index("const pct="),
             self.template.index("pct(breadth.up_rate)"),
@@ -122,6 +148,12 @@ class DashboardOperationsTest(unittest.TestCase):
             "if(historyEntryMode.value==='KIS_1000_LIMIT')historyCohort.value='SELECTED'",
             self.template,
         )
+        self.assertNotIn("historyCohort.value='SELECTED'", self.template)
+        self.assertIn("entry_mode:'OPEN'", self.template)
+        self.assertNotIn('id="history-entry-mode"', self.template)
+        self.assertNotIn('id="history-entry-minimum"', self.template)
+        self.assertNotIn('id="history-entry-limit"', self.template)
+        self.assertNotIn("historyEntryMode.value='KIS_1000_LIMIT'", self.template)
         local_test = (
             Path(__file__).resolve().parent.parent
             / "tools"
@@ -160,7 +192,7 @@ class DashboardOperationsTest(unittest.TestCase):
             self.template,
         )
         self.assertIn("historyHolding.value='5'", self.template)
-        self.assertIn("historyEntryMode.value='OPEN'", self.template)
+        self.assertIn("const entryMatch=x=>(x.entry_mode||'OPEN')==='OPEN'", self.template)
 
     def test_historical_trades_are_deduplicated_by_identity(self) -> None:
         self.assertIn("const tradeByIdentity=new Map()", self.template)
@@ -175,6 +207,7 @@ class DashboardOperationsTest(unittest.TestCase):
             / "tools"
             / "kis_dashboard_server.py"
         ).read_text(encoding="utf-8")
+        self.assertNotIn("snapshot = _save_operational_entry_snapshot(prices)", server)
         self.assertIn('"/api/run-operational-selection"', server)
         self.assertIn('"/api/news-headlines"', server)
         self.assertIn('"/api/run-event-candidates"', server)

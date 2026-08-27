@@ -7,7 +7,7 @@
   <style>
     :root{--bg:#07111f;--panel:#0d1b2d;--line:#20344d;--text:#e8f0f8;--muted:#8fa6bd;--cyan:#5eead4;--blue:#60a5fa;--green:#34d399;--amber:#fbbf24;--red:#fb7185}
     *{box-sizing:border-box} body{margin:0;background:radial-gradient(circle at 80% 0,#12325a 0,transparent 32%),var(--bg);color:var(--text);font:14px/1.55 Inter,system-ui,sans-serif}
-    main{max-width:1180px;margin:auto;padding:42px 22px 70px}.eyebrow{color:var(--cyan);font-size:12px;font-weight:800;letter-spacing:.16em}
+    main{max-width:1380px;margin:auto;padding:42px 22px 70px}.eyebrow{color:var(--cyan);font-size:12px;font-weight:800;letter-spacing:.16em}
     h1{font-size:clamp(32px,5vw,58px);line-height:1;margin:12px 0}.sub{color:var(--muted);max-width:700px}
     .top{display:flex;justify-content:space-between;gap:30px;align-items:end;margin-bottom:34px}.stamp{text-align:right;color:var(--muted);font-size:12px}
     .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}.card{background:linear-gradient(145deg,rgba(17,35,57,.96),rgba(10,24,41,.96));border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:0 14px 40px #0004}
@@ -18,7 +18,7 @@
     table{width:100%;border-collapse:collapse;margin-top:12px}th,td{text-align:left;padding:11px 10px;border-bottom:1px solid var(--line);white-space:nowrap}th{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em}.scroll{overflow:auto}
     .empty{color:var(--muted);padding:28px 0;text-align:center}.good{color:var(--green)}.bad{color:var(--red)}.watch{color:var(--amber)} h2{margin:0 0 4px;font-size:18px}
     .legend{display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:15px}
-    .runner{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin:0 0 18px}.runner label{display:grid;gap:6px;color:var(--muted);font-size:12px}
+    .runner{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin:0 0 18px}.runner label{display:grid;gap:6px;color:var(--muted);font-size:12px}.runner-break{flex-basis:100%;height:0}
     .runner input,.runner select,.runner button{height:42px;border-radius:10px;border:1px solid var(--line);font:inherit}.runner input,.runner select{background:#07111f;color:var(--text);padding:0 12px}.runner button{background:linear-gradient(90deg,var(--blue),var(--cyan));color:#03111c;font-weight:850;padding:0 18px;cursor:pointer}.runner button:disabled{opacity:.45;cursor:wait}
     .run-message{color:var(--muted);min-height:22px}.run-message.error{color:var(--red)}.run-message.good{color:var(--green)}
     .news-check{border:1px solid var(--line);border-radius:8px;background:#102944;color:var(--cyan);padding:7px 10px;font:inherit;font-weight:800;cursor:pointer}.news-check:disabled{opacity:.45;cursor:wait}.news-list{display:grid;gap:10px;margin-top:14px}.news-item{display:grid;gap:3px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#07111f99}.news-item a{color:var(--text);font-weight:750;text-decoration:none;white-space:normal}.news-item a:hover{color:var(--cyan)}.news-meta{color:var(--muted);font-size:12px}.news-links{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}.news-links a{color:var(--cyan)}
@@ -28,8 +28,8 @@
   </style>
 </head>
 <body><main>
-  <div class="top"><div><div class="eyebrow">TITAN · KIS READ-ONLY</div><h1>S80 Operations Console</h1><div class="sub">전날 S80 종목 선정, 다음 날 10시 매수 판단, 보유 종목의 익절·손절 상태를 확인합니다. 실제 주문 요청은 코드 수준에서 차단됩니다.</div></div><div class="stamp">마지막 생성<br><strong id="generated"></strong></div></div>
-  <nav class="tabs"><button class="tab-button active" data-tab="current-panel">현재 운영</button><button class="tab-button" data-tab="research-panel">A4/C3 전진 검증</button><button class="tab-button" data-tab="history-panel">운영 전략 과거 성과</button></nav>
+  <div class="top"><div><div class="eyebrow">TITAN · KIS READ-ONLY</div><h1>S80 Operations Console</h1><div class="sub">전날 S80 종목 선정, 다음 거래일 시가 갭 확인, 보유 종목의 익절·손절 상태를 확인합니다. 실제 주문 요청은 코드 수준에서 차단됩니다.</div></div><div class="stamp">마지막 생성<br><strong id="generated"></strong></div></div>
+  <nav class="tabs"><button class="tab-button active" data-tab="current-panel">현재 운영</button><button class="tab-button" data-tab="history-panel">운영 전략 과거 성과</button></nav>
   <section class="grid tab-panel active" id="current-panel">
     <article class="card full"><h2>현재 운영 전략</h2><div class="metrics"><div class="tile"><div class="label">운영 상태</div><div class="value" id="operational-label">—</div></div><div class="tile"><div class="label">전략 버전</div><div class="value" id="operational-version" style="font-size:16px">—</div></div></div><div class="sub" id="operational-summary"></div></article>
     <article class="card full"><h2>오늘 해야 할 행동</h2><div class="big" id="today-action">확인 중</div><div class="sub" id="today-action-detail"></div><div class="sub" id="server-task-status">실행 작업 확인 중</div><div class="sub" id="live-price-status">KIS 현재가 확인 전</div><div class="runner"><label>선정 기준일<input id="operational-selection-date" type="date"></label><button id="operational-selection-run" type="button">S80 종목 선정 실행</button><div class="run-message" id="operational-selection-message"></div></div></article>
@@ -44,34 +44,16 @@
       <div class="tile"><div class="label">주문 요청</div><div class="value" id="orders">—</div></div>
       <div class="tile"><div class="label">분석 종목</div><div class="value" id="analyzed">—</div></div>
     </div></article>
-    <article class="card half"><h2>매수 선정 종목</h2><div class="sub" id="selected-note">V1 매수 기준을 모두 통과한 후보</div><div class="scroll" id="selected"></div></article>
-    <article class="card half"><h2>관찰 종목 · 10시 가정 진입 추적</h2><div class="sub" id="observed-note">70–79점의 비추천 추적군입니다. 09:50~10:10 가격을 모의 진입가로 가정하며 실제 매수 대상은 아닙니다.</div><div class="scroll" id="observed"></div></article>
-    <article class="card full"><h2>S80 모의진입 성과</h2><div class="sub">09:50~10:10 저장값 중 10시에 가장 가까운 허용 진입만 추적합니다. 실제 주문은 실행하지 않습니다.</div><div class="metrics"><div class="tile"><div class="label">10시 진입 표본</div><div class="value" id="s80-entry-total">0</div></div><div class="tile"><div class="label">완료 거래</div><div class="value" id="s80-completed">0</div></div><div class="tile"><div class="label">승률</div><div class="value" id="s80-win-rate">—</div></div><div class="tile"><div class="label">평균 수익률</div><div class="value" id="s80-average">—</div></div></div><div class="scroll" id="s80-shadow-trades"></div></article>
-    <article class="card full"><h2>S80 본체·10시 실행 계층 비교</h2><div class="sub">장기 검증은 다음 거래일 시초가 본체로 수행하고, 10시 규칙은 분봉이 있는 기간의 실행 오버레이로만 평가합니다.</div><pre id="s80-entry-layers-report" style="white-space:pre-wrap;overflow:auto"></pre></article>
-    <article class="card full"><h2>S80 분봉 청산 검증 준비도</h2><div class="sub">10시 진입 이후 분봉이 있어야 +5% 익절과 -10% 손절의 최초 도달 순서를 판정할 수 있습니다.</div><pre id="intraday-exit-coverage-report" style="white-space:pre-wrap;overflow:auto"></pre></article>
-    <article class="card full"><h2>S80 익절·손절 성과 경계</h2><div class="sub">진입 전 임계값 접촉과 같은 날 양쪽 임계값 도달을 비관·낙관 두 경계로 계산합니다. 표본이 적으므로 승격 근거로 사용하지 않습니다.</div><pre id="s80-exit-bounds-report" style="white-space:pre-wrap;overflow:auto"></pre></article>
-    <article class="card full"><h2>S80 5거래일 무진전 청산 연구</h2><div class="sub">5거래일까지 +2%에 도달하지 못하고 종가가 진입가 이하인 경우의 조기 청산을 기존 규칙과 비교합니다. 운영 규칙에는 반영하지 않습니다.</div><pre id="s80-no-progress-report" style="white-space:pre-wrap;overflow:auto"></pre></article>
+    <article class="card full"><h2>매수 선정 종목</h2><div class="sub" id="selected-note">V1 매수 기준을 모두 통과한 후보</div><div class="scroll" id="selected"></div></article>
+    <article class="card full"><h2>관찰 종목</h2><div class="sub" id="observed-note">70–79점의 비추천 참고군이며 실제 매수 대상이 아닙니다.</div><div class="scroll" id="observed"></div></article>
     <article class="card full" id="news-panel" style="display:none"><h2>기사·공시 보조 확인</h2><div class="sub" id="news-note">기사 본문이나 자동 매수 판단 없이 최근 기사 제목만 표시합니다.</div><div class="run-message" id="news-message"></div><div class="news-links" id="news-links"></div><div class="news-list" id="news-results"></div></article>
     <article class="card full" data-archived-feature="event-candidates" style="display:none"><h2>당일 이벤트 후보 · 모의 운영</h2><div class="sub">9시 30분에는 참고 후보를 확인하고, 9시 50분~10시 10분 실행 결과만 10시 모의매수 표본으로 저장합니다. 당일 -1~+3%, 시가·VWAP 이상, 거래량 속도 2배 이상을 모두 확인하며 실제 주문은 실행하지 않습니다.</div><div class="runner"><button id="event-candidate-run" type="button">이벤트 후보 모의 검색</button><div class="run-message" id="event-candidate-message"></div></div><div class="scroll" id="event-candidates"></div><div class="sub" id="event-exclusion-summary"></div></article>
     <article class="card full" data-archived-feature="event-performance" style="display:none"><h2>이벤트 후보 모의 성과</h2><div class="sub">익절 +5% · 손절 -10% · 최대 20거래일. 일봉으로 전후를 구분할 수 없는 진입 당일은 매도 판정에서 제외합니다.</div><div class="metrics"><div class="tile"><div class="label">10시 진입 표본</div><div class="value" id="event-entry-total">0</div></div><div class="tile"><div class="label">완료 거래</div><div class="value" id="event-completed">0</div></div><div class="tile"><div class="label">승률</div><div class="value" id="event-win-rate">—</div></div><div class="tile"><div class="label">평균 수익률</div><div class="value" id="event-average">—</div></div></div><div class="scroll" id="event-shadow-trades"></div></article>
     <article class="card full"><h2>보유 종목 관리</h2><div class="sub">실제 주문은 실행하지 않습니다. 수동 체결 내역을 입력하면 최신 종가 기준 익절·손절 상태를 표시합니다.</div><div class="runner"><label>종목코드<input id="position-code" maxlength="6" placeholder="005930"></label><label>종목명<input id="position-name" placeholder="삼성전자"></label><label>매수일<input id="position-date" type="date"></label><label>매수가<input id="position-price" type="number" min="1" step="1"></label><label>수량<input id="position-quantity" type="number" min="1" step="1"></label><button id="position-add" type="button">보유 종목 추가</button><div class="run-message" id="position-message"></div></div><div class="scroll" id="positions"></div></article>
     <article class="card full" style="display:none"><h2>거래일별 실행 이력</h2><div class="scroll" id="history"></div><div class="legend"><span>통과 기준: API ≥98%</span><span>재시도 ≤20%</span><span>품질 제외 ≤5%</span><span>조회 실패 0</span><span>주문 요청 0</span></div></article>
   </section>
-  <section class="grid tab-panel" id="research-panel">
-    <article class="card full"><h2>A4/C3 한눈에 보기</h2><div class="sub" id="ac-overview-note">전진 검증 상태를 확인 중입니다.</div><div class="metrics"><div class="tile"><div class="label">현재 판정</div><div class="value" id="ac-overview-status">—</div></div><div class="tile"><div class="label">40일 완료</div><div class="value" id="ac-overview-progress">0 / 100</div></div><div class="tile"><div class="label">이번 주 신규 신호</div><div class="value" id="ac-overview-signals">0</div></div><div class="tile"><div class="label">체결 대기·보유</div><div class="value" id="ac-overview-live">0</div></div></div><div class="legend"><span>0~29건: 검증 중</span><span>30~99건: 중간 검토</span><span>100건 이상: 승격 심사 가능</span><span>현재 실주문: 0건</span></div></article>
-    <article class="card full"><h2>이번 주 할 일</h2><div class="sub">매주 같은 요일에 한 번 실행하면 신호가 없어도 전진 검증 이력이 저장됩니다. 실제 주문은 발생하지 않습니다.</div><div class="runner"><button id="ac-overview-run" type="button">A4/C3 주간 검증 실행</button><div class="run-message" id="ac-overview-message"></div></div></article>
-    <article class="card full"><h2>A/C 혼합·강건성 진단</h2><div class="sub">A 4슬롯·C 3슬롯 혼합과 2026년 및 최고 수익 거래 제외 결과를 비교합니다.</div><pre id="challenger-robustness" style="white-space:pre-wrap;overflow:auto"></pre></article>
-    <article class="card full"><h2>2020 확장 스트레스 진단</h2><div class="sub">동결된 A·C의 2021~2026 연도·시장 국면·종목 수익 집중도를 표시합니다.</div><pre id="challenger-stress" style="white-space:pre-wrap;overflow:auto"></pre></article>
-    <article class="card full"><h2>A/C 보유기간 경로 비교</h2><div class="sub">동일한 A/C 신호를 10·20·40·60거래일에 평가해 고정 40일 보유가 적절한지 비교합니다.</div><pre id="holding-horizon-report" style="white-space:pre-wrap;overflow:auto"></pre></article>
-    <article class="card full"><h2>최신 주간 전진 검증 스냅숏</h2><div class="sub">주간 섀도 실행 시 신규 신호, 보유 현황, A/C별 성과, 보유기간 경로와 승격 진행률이 자동 저장됩니다.</div><pre id="weekly-snapshot-report" style="white-space:pre-wrap;overflow:auto"></pre></article>
-    <article class="card full"><h2>A/C 주간 섀도 운용</h2><div class="sub">실제 주문 없이 A 4슬롯·C 3슬롯을 추적합니다. 신규 신호는 다음 거래일 시가에 모의 체결되고 40거래일 후 평가됩니다.</div><div class="metrics"><div class="tile"><div class="label">완료 / 목표</div><div class="value" id="shadow-progress">0 / 100</div></div><div class="tile"><div class="label">대기·보유</div><div class="value" id="shadow-active">0</div></div><div class="tile"><div class="label">평균 순수익</div><div class="value" id="shadow-net">—</div></div><div class="tile"><div class="label">평균 초과수익</div><div class="value" id="shadow-excess">—</div></div></div><div class="runner"><button id="shadow-run" type="button">이번 주 섀도 실행</button><div class="run-message" id="shadow-message"></div></div><div class="scroll" id="shadow-positions"></div></article>
-    <article class="card full"><h2>월별 섀도 재생 테스트</h2><div class="sub">라이브 상태와 분리된 파일에서 선택한 월의 주간 신호를 재생하고 마지막 신호의 40거래일 평가 시점까지 계산합니다.</div><div class="runner"><input id="shadow-replay-month" type="month" value="2026-01"><button id="shadow-replay-run" type="button">선택 월 테스트</button><div class="run-message" id="shadow-replay-message"></div></div><div class="scroll" id="shadow-replays"></div></article>
-    <article class="card full"><h2>검색 요일 민감도</h2><div class="sub">동일한 A/C 규칙을 월~금 각 요일에 고정하여 비교합니다. 공휴일은 다른 날로 대체하지 않습니다.</div><div class="runner"><input id="weekday-start" type="month" value="2026-01"><input id="weekday-end" type="month" value="2026-06"><button id="weekday-run" type="button">요일 민감도 실행</button><div class="run-message" id="weekday-message"></div></div><div class="scroll" id="weekday-results"></div></article>
-    <article class="card full"><h2>A4/C3 검증 감사</h2><div class="sub">데이터 신뢰성, 시점 누수, 진입 시가, 격리 구간, 비용·슬롯·집중도·요일 민감도와 전진 표본을 승격 게이트로 검사합니다.</div><pre id="ac43-audit-report" style="white-space:pre-wrap;overflow:auto"></pre></article>
-    <article class="card full"><h2>연구 전략 통합 판정표</h2><div class="sub">표본, 초과성과, 낙폭, 연도 안정성과 종목 집중도를 함께 반영한 유지·관찰·중단 판정입니다.</div><pre id="unified-scorecard" style="white-space:pre-wrap;overflow:auto"></pre></article>
-  </section>
   <section class="grid tab-panel" id="history-panel">
-    <article class="card full"><h2>과거 월간·연간 테스트</h2><div class="sub">운영 S80과 비교 가치가 남은 위험필터 5일형·V1.1 기준선만 제공합니다. 10시 일반 테스트는 저장 분봉을 사용하지만 S80의 오전 안정성 네 조건을 모두 적용한 공식 25건 검증과는 구분됩니다.</div><div class="runner"><label>전략 버전<select id="history-strategy"><option value="V1.3-S80-N7-TP5-SL10-CANDIDATE">S80 운영 연구</option><option value="V1.3-RISK-5D-CANDIDATE">V1.3 위험필터 5거래일 비교군</option><option value="V1.1">V1.1 기준선</option></select></label><label>비교 그룹<select id="history-cohort"><option value="SELECTED">정식 선정군</option><option value="COMPARE">선정군·후보군 비교</option><option value="OBSERVATION">관찰 후보군</option></select></label><label>매도 기간<select id="history-holding"><option value="1">1거래일</option><option value="5">5거래일</option><option value="10">10거래일</option><option value="20">20거래일</option></select></label><label>매수 방식<select id="history-entry-mode"><option value="OPEN">다음 날 시가</option><option value="KIS_1000_LIMIT">다음 날 10시 지정가</option></select></label><label>매수 하한 (%)<input id="history-entry-minimum" type="number" min="-100" max="0" step="0.1" placeholder="제한 없음"></label><label>매수 상한 (%)<input id="history-entry-limit" type="number" min="0" max="100" step="0.1" value="3"></label><label>익절률 (%)<input id="history-profit-target" type="number" min="0.1" max="100" step="0.1" placeholder="전략 기본값"></label><label>손절률 (%)<input id="history-stop-loss" type="number" min="0.1" max="100" step="0.1" placeholder="전략 기본값"></label><label>대상 월<input id="history-month" type="month"></label><button id="history-month-run" type="button">월간 테스트 실행</button><label>대상 연도<input id="history-year" type="number" min="2022" max="2026" step="1"></label><button id="history-run" type="button">연간 테스트 실행</button><div class="run-message" id="history-message"></div></div></article>
+    <article class="card full"><h2>과거 월간·연간 테스트</h2><div class="sub">모든 결과는 다음 거래일 시가 진입 기준입니다. 종목 선정 알고리즘과 청산 조건을 비교하는 데 필요한 항목만 제공합니다.</div><div class="runner"><label>전략 버전<select id="history-strategy"><option value="V1.3-S80-N7-TP5-SL10-CANDIDATE">S80 운영 연구</option><option value="V1.3-RISK-5D-CANDIDATE">V1.3 위험필터 5거래일 비교군</option><option value="V1.1">V1.1 기준선</option></select></label><label>비교 그룹<select id="history-cohort"><option value="SELECTED">정식 선정군</option><option value="COMPARE">선정군·후보군 비교</option><option value="OBSERVATION">관찰 후보군</option></select></label><label>매도 기간<select id="history-holding"><option value="1">1거래일</option><option value="5">5거래일</option><option value="10">10거래일</option><option value="20">20거래일</option></select></label><label>익절률 (%)<input id="history-profit-target" type="number" min="0.1" max="100" step="0.1" placeholder="전략 기본값"></label><label>손절률 (%)<input id="history-stop-loss" type="number" min="0.1" max="100" step="0.1" placeholder="전략 기본값"></label><span class="runner-break" aria-hidden="true"></span><label>대상 월<input id="history-month" type="month"></label><button id="history-month-run" type="button">월간 테스트 실행</button><label>대상 연도<input id="history-year" type="number" min="2022" max="2026" step="1"></label><button id="history-run" type="button">연간 테스트 실행</button><div class="run-message" id="history-message"></div></div></article>
     <article class="card full"><div class="metrics"><div class="tile"><div class="label">완료 거래</div><div class="value" id="trade-total">0</div></div><div class="tile"><div class="label">승리 거래</div><div class="value" id="trade-wins">0</div></div><div class="tile"><div class="label">순승률</div><div class="value" id="trade-win-rate">—</div></div><div class="tile"><div class="label">평균 순수익률</div><div class="value" id="trade-average">—</div></div></div></article>
     <article class="card full"><h2>기간별 선정·관찰 후보</h2><div class="sub" id="history-candidate-note"></div><div class="scroll" id="history-candidates"></div></article>
     <article class="card full"><h2>그룹별 비교</h2><div class="scroll" id="cohort-comparison"></div></article>
@@ -111,52 +93,6 @@
 <script>
 const D=__TITAN_DATA__;
 const pct=v=>v==null?'—':(v*100).toFixed(2)+'%';
-const research=D.strategy_research||{};
-document.querySelector('#intraday-exit-coverage-report').textContent=research.intraday_exit_coverage_report||'분봉 청산 커버리지 감사 결과가 없습니다.';
-document.querySelector('#s80-exit-bounds-report').textContent=research.s80_exit_bounds_report||'S80 익절·손절 경계 결과가 없습니다.';
-document.querySelector('#s80-no-progress-report').textContent=research.s80_no_progress_report||'S80 무진전 청산 연구 결과가 없습니다.';
-document.querySelector('#s80-entry-layers-report').textContent=research.s80_entry_layers_report||'S80 진입 계층 비교 결과가 없습니다.';
-const acSnapshot=research.weekly_snapshot||{},acProgress=acSnapshot.progress||{},acAudit=research.ac43_audit||{};
-document.querySelector('#ac-overview-status').textContent=acSnapshot.promotion_status||acAudit.verdict||'검증 시작 전';
-document.querySelector('#ac-overview-progress').textContent=`${acProgress.closed||0} / ${acProgress.review_target||100}`;
-document.querySelector('#ac-overview-signals').textContent=(acSnapshot.new_signals||[]).length;
-document.querySelector('#ac-overview-live').textContent=(acSnapshot.live_positions||[]).length;
-document.querySelector('#ac-overview-note').textContent=(acSnapshot.promotion_status==='REVIEW_READY')?'100건 전진 표본을 확보했습니다. 감사 게이트와 함께 승격 심사가 가능합니다.':(acSnapshot.promotion_status==='WATCH')?'30건 이상이 완료되어 중간 검토 단계입니다. 아직 실제 투자 단계는 아닙니다.':'전진 완료 표본과 공식 조정주가가 부족해 실제 투자에는 사용할 수 없습니다.';
-document.querySelector('#challenger-robustness').textContent=research.challenger_robustness_markdown||'아직 계산된 혼합·강건성 결과가 없습니다.';
-document.querySelector('#challenger-stress').textContent=research.challenger_stress_markdown||'아직 계산된 확장 스트레스 결과가 없습니다.';
-document.querySelector('#holding-horizon-report').textContent=research.holding_horizon_report||'아직 계산된 보유기간 비교 결과가 없습니다.';
-document.querySelector('#weekly-snapshot-report').textContent=research.weekly_snapshot_report||'아직 주간 전진 검증 스냅숏이 없습니다.';
-const shadow=research.shadow_state||{},shadowSummary=shadow.summary||{};
-document.querySelector('#shadow-progress').textContent=`${shadowSummary.closed||0} / ${shadowSummary.progress_target||100}`;
-document.querySelector('#shadow-active').textContent=(shadowSummary.pending||0)+(shadowSummary.open||0);
-document.querySelector('#shadow-net').textContent=shadowSummary.average_net_return==null?'—':pct(shadowSummary.average_net_return);
-document.querySelector('#shadow-excess').textContent=shadowSummary.average_excess_return==null?'—':pct(shadowSummary.average_excess_return);
-document.querySelector('#shadow-positions').innerHTML=(shadow.positions||[]).filter(row=>row.status==='PENDING_ENTRY'||row.status==='OPEN').map(row=>`<div class="row"><strong>${row.source} · ${row.code} ${row.name}</strong><span>${row.status} · ${row.entry_price==null?'체결 대기':Number(row.entry_price).toLocaleString()}</span></div>`).join('')||'<div class="sub">현재 대기·보유 포지션이 없습니다.</div>';
-const acRunButtons=[document.querySelector('#ac-overview-run'),document.querySelector('#shadow-run')];
-const acRunMessages=[document.querySelector('#ac-overview-message'),document.querySelector('#shadow-message')];
-async function runAcWeekly(){
-  acRunButtons.forEach(button=>button.disabled=true);
-  acRunMessages.forEach(message=>{message.className='run-message';message.textContent='A4/C3 주간 검증을 실행 중입니다.'});
-  try{
-    const response=await fetch('/api/research-shadow-run',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-    const result=await jsonResponse(response);
-    if(!response.ok)throw new Error(result.message||'A4/C3 주간 검증 실행 실패');
-    acRunMessages.forEach(message=>{message.className='run-message good';message.textContent='A4/C3 주간 검증이 완료되었습니다.'});
-    setTimeout(reloadPreservingView,800);
-  }catch(error){
-    const detail=(location.protocol==='file:')?'대시보드 서버로 열어야 실행할 수 있습니다: http://127.0.0.1:8765':error.message;
-    acRunMessages.forEach(message=>{message.className='run-message error';message.textContent=detail});
-    acRunButtons.forEach(button=>button.disabled=false);
-  }
-}
-acRunButtons.forEach(button=>button.addEventListener('click',runAcWeekly));
-document.querySelector('#shadow-replays').innerHTML=(research.shadow_replays||[]).length?'<table><thead><tr><th>월</th><th>주기</th><th>신호일</th><th>완료</th><th>평균 순수익</th><th>초과수익</th></tr></thead><tbody>'+research.shadow_replays.map(x=>`<tr><td>${x.replay.month||'—'}</td><td>${x.replay.cadence||'—'}</td><td>${(x.replay.signal_dates||[]).length}</td><td>${x.summary.closed||0}</td><td>${pct(x.summary.average_net_return)}</td><td>${pct(x.summary.average_excess_return)}</td></tr>`).join('')+'</tbody></table>':'<div class="sub">저장된 월별 재생 테스트가 없습니다.</div>';
-document.querySelector('#shadow-replay-run').addEventListener('click',async event=>{const button=event.currentTarget,message=document.querySelector('#shadow-replay-message'),month=document.querySelector('#shadow-replay-month').value;if(!month){message.textContent='월을 선택해 주세요.';return}button.disabled=true;message.textContent='선택 월의 주간 신호를 재생 중입니다.';try{const response=await fetch('/api/research-shadow-replay',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({month})});const result=await jsonResponse(response);if(!response.ok)throw new Error(result.message||'월별 재생 실패');message.className='run-message good';message.textContent=result.message;setTimeout(reloadPreservingView,500)}catch(error){message.className='run-message error';message.textContent=error.message;button.disabled=false}});
-const weekdayResult=research.weekday_sensitivity||{};
-document.querySelector('#weekday-results').innerHTML=(weekdayResult.rows||[]).length?'<table><thead><tr><th>요일</th><th>검색일</th><th>완료</th><th>승률</th><th>평균 순수익</th><th>초과수익</th><th>최고 거래 제외</th></tr></thead><tbody>'+weekdayResult.rows.map(x=>`<tr><td>${x.weekday}</td><td>${x.signal_dates}</td><td>${x.closed}</td><td>${pct(x.win_rate)}</td><td>${pct(x.average_net_return)}</td><td>${pct(x.average_excess_return)}</td><td>${pct(x.average_without_best)}</td></tr>`).join('')+'</tbody></table>':'<div class="sub">저장된 요일 민감도 결과가 없습니다.</div>';
-document.querySelector('#weekday-run').addEventListener('click',async event=>{const button=event.currentTarget,message=document.querySelector('#weekday-message'),start=document.querySelector('#weekday-start').value,end=document.querySelector('#weekday-end').value;if(!start||!end){message.textContent='시작월과 종료월을 선택해 주세요.';return}button.disabled=true;message.textContent='월~금 독립 재생 중입니다. 오래 걸릴 수 있습니다.';try{const response=await fetch('/api/research-shadow-weekday',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({start_month:start,end_month:end})});const result=await jsonResponse(response);if(!response.ok)throw new Error(result.message||'요일 민감도 실패');message.className='run-message good';message.textContent=result.message;setTimeout(reloadPreservingView,500)}catch(error){message.className='run-message error';message.textContent=error.message;button.disabled=false}});
-document.querySelector('#unified-scorecard').textContent=research.unified_scorecard||'아직 통합 판정표가 없습니다.';
-document.querySelector('#ac43-audit-report').textContent=research.ac43_audit_report||'아직 A4/C3 감사 결과가 없습니다.';
 const breakoutDate=document.querySelector('#breakout-date');
 const breakoutButton=document.querySelector('#breakout-run');
 const breakoutMessage=document.querySelector('#breakout-message');
@@ -305,13 +241,6 @@ sectorButton.addEventListener('click',async()=>{
 });
 const eventSafe=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const eventShadow=D.event_shadow||{trades:[],entry_candidates:0,completed:0};
-const s80Shadow=D.operational_shadow||{trades:[],entry_candidates:0,completed:0};
-document.querySelector('#s80-entry-total').textContent=s80Shadow.entry_candidates||0;
-document.querySelector('#s80-completed').textContent=s80Shadow.completed||0;
-document.querySelector('#s80-win-rate').textContent=pct(s80Shadow.win_rate);
-document.querySelector('#s80-average').textContent=pct(s80Shadow.average_net_return);
-const s80ReasonNames={TAKE_PROFIT:'익절',STOP_LOSS:'손절',TIME_EXIT:'기간 만료',TRACKING:'추적 중'};
-document.querySelector('#s80-shadow-trades').innerHTML=(s80Shadow.trades||[]).length?'<table><thead><tr><th>진입일</th><th>종목</th><th>10시 기준가</th><th>최신/매도가</th><th>수익률</th><th>상태</th></tr></thead><tbody>'+s80Shadow.trades.slice().reverse().map(x=>{const completed=x.net_return!=null;const displayPrice=completed?x.exit_price:x.latest_price;const displayReturn=completed?x.net_return:(x.latest_price/x.entry_price-1);return `<tr><td>${eventSafe(x.entry_date)}</td><td>${eventSafe(x.name)} (${eventSafe(x.code)})</td><td>${Number(x.entry_price).toLocaleString()}</td><td>${Number(displayPrice).toLocaleString()}</td><td class="${displayReturn>=0?'good':'bad'}">${pct(displayReturn)}</td><td class="${x.exit_reason==='TAKE_PROFIT'?'good':x.exit_reason==='STOP_LOSS'?'bad':'watch'}">${s80ReasonNames[x.exit_reason]||eventSafe(x.exit_reason)}</td></tr>`}).join('')+'</tbody></table>':'<div class="empty">저장된 S80 10시 모의진입이 아직 없습니다.</div>';
 document.querySelector('#event-entry-total').textContent=eventShadow.entry_candidates||0;
 document.querySelector('#event-completed').textContent=eventShadow.completed||0;
 document.querySelector('#event-win-rate').textContent=pct(eventShadow.win_rate);
@@ -384,9 +313,6 @@ const historyCohort=document.querySelector('#history-cohort');
 const historyStrategy=document.querySelector('#history-strategy');
 const historyProfitTarget=document.querySelector('#history-profit-target');
 const historyStopLoss=document.querySelector('#history-stop-loss');
-const historyEntryMode=document.querySelector('#history-entry-mode');
-const historyEntryMinimum=document.querySelector('#history-entry-minimum');
-const historyEntryLimit=document.querySelector('#history-entry-limit');
 const historyMonthButton=document.querySelector('#history-month-run');
 const historyButton=document.querySelector('#history-run');
 const historyMessage=document.querySelector('#history-message');
@@ -403,30 +329,19 @@ const storedHistoryStrategy=sessionStorage.getItem('titan-history-strategy');
 historyStrategy.value=allowedHistoryStrategies.has(storedHistoryStrategy)?storedHistoryStrategy:'V1.3-S80-N7-TP5-SL10-CANDIDATE';
 historyProfitTarget.value=sessionStorage.getItem('titan-history-profit-target')||'5';
 historyStopLoss.value=sessionStorage.getItem('titan-history-stop-loss')||'10';
-historyEntryMode.value=sessionStorage.getItem('titan-history-entry-mode')||'KIS_1000_LIMIT';
-historyEntryMinimum.value=sessionStorage.getItem('titan-history-entry-minimum')||'-3';
-historyEntryLimit.value=sessionStorage.getItem('titan-history-entry-limit')||'3';
 function applyHistoryStrategyPreset(){
-  historyCohort.value='SELECTED';
-  historyEntryLimit.value='3';
   if(historyStrategy.value==='V1.3-S80-N7-TP5-SL10-CANDIDATE'){
     historyHolding.value='20';
     historyProfitTarget.value='5';
     historyStopLoss.value='10';
-    historyEntryMode.value='KIS_1000_LIMIT';
-    historyEntryMinimum.value='-3';
   }else if(historyStrategy.value==='V1.3-RISK-5D-CANDIDATE'){
     historyHolding.value='5';
     historyProfitTarget.value='';
     historyStopLoss.value='';
-    historyEntryMode.value='OPEN';
-    historyEntryMinimum.value='';
   }else{
     historyHolding.value='1';
     historyProfitTarget.value='';
     historyStopLoss.value='';
-    historyEntryMode.value='OPEN';
-    historyEntryMinimum.value='';
   }
 }
 applyHistoryStrategyPreset();
@@ -453,9 +368,6 @@ historyStrategy.addEventListener('change',()=>{
   sessionStorage.setItem('titan-history-holding',historyHolding.value);
   sessionStorage.setItem('titan-history-profit-target',historyProfitTarget.value);
   sessionStorage.setItem('titan-history-stop-loss',historyStopLoss.value);
-  sessionStorage.setItem('titan-history-entry-mode',historyEntryMode.value);
-  sessionStorage.setItem('titan-history-entry-minimum',historyEntryMinimum.value);
-  sessionStorage.setItem('titan-history-entry-limit',historyEntryLimit.value);
   sessionStorage.setItem('titan-history-cohort',historyCohort.value);
   renderHistoricalPeriod(currentHistoricalPeriod());
 });
@@ -464,18 +376,6 @@ historyStrategy.addEventListener('change',()=>{
   sessionStorage.setItem('titan-history-stop-loss',historyStopLoss.value);
   renderHistoricalPeriod(currentHistoricalPeriod());
 }));
-historyEntryMode.addEventListener('change',()=>{
-  sessionStorage.setItem('titan-history-entry-mode',historyEntryMode.value);
-  renderHistoricalPeriod(currentHistoricalPeriod());
-});
-historyEntryMinimum.addEventListener('change',()=>{
-  sessionStorage.setItem('titan-history-entry-minimum',historyEntryMinimum.value);
-  renderHistoricalPeriod(currentHistoricalPeriod());
-});
-historyEntryLimit.addEventListener('change',()=>{
-  sessionStorage.setItem('titan-history-entry-limit',historyEntryLimit.value);
-  renderHistoricalPeriod(currentHistoricalPeriod());
-});
 const savedTab=pageParams.get('tab')||sessionStorage.getItem('titan-active-tab');
 if(savedTab){
   const savedButton=document.querySelector(`.tab-button[data-tab="${savedTab}"]`);
@@ -525,6 +425,7 @@ runButton.addEventListener('click',async()=>{
     runButton.disabled=false;
   }
 });
+function startHistoryProgress(){return setInterval(async()=>{try{const response=await fetch('/api/status');const status=await response.json();if(status.task==='HISTORICAL_YEAR_TEST'&&Number.isFinite(status.progress))historyMessage.textContent=`과거 연간 테스트 중입니다. 진행률: ${status.progress}%`}catch(_){}},1000)}
 historyButton.addEventListener('click',async()=>{
   if(!historyYear.value)return;
   sessionStorage.setItem('titan-history-year',historyYear.value);
@@ -533,8 +434,9 @@ historyButton.addEventListener('click',async()=>{
   sessionStorage.setItem('titan-active-tab','history-panel');
   history.replaceState(null,'',`/?tab=history-panel&year=${encodeURIComponent(historyYear.value)}&holding=${historyHolding.value}`);
   historyButton.disabled=true; historyMessage.className='run-message'; historyMessage.textContent='과거 연간 테스트 중입니다.';
+  const progressTimer=startHistoryProgress();
   try{
-    const response=await fetch('/api/run-year',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({year:historyYear.value,holding_sessions:Number(historyHolding.value),strategy_version:historyStrategy.value,profit_target:historyProfitTarget.value||null,stop_loss:historyStopLoss.value||null,entry_mode:historyEntryMode.value,entry_minimum:historyEntryMinimum.value||null,entry_limit:historyEntryLimit.value})});
+    const response=await fetch('/api/run-year',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({year:historyYear.value,holding_sessions:Number(historyHolding.value),strategy_version:historyStrategy.value,profit_target:historyProfitTarget.value||null,stop_loss:historyStopLoss.value||null,entry_mode:'OPEN'})});
     const result=await response.json();
     if(!response.ok)throw new Error(result.message||'연간 테스트에 실패했습니다.');
     sessionStorage.setItem('titan-history-result-period',historyYear.value);
@@ -543,7 +445,7 @@ historyButton.addEventListener('click',async()=>{
   }catch(error){
     historyMessage.className='run-message error'; historyMessage.textContent=error.message;
     historyButton.disabled=false;
-  }
+  }finally{clearInterval(progressTimer)}
 });
 historyMonthButton.addEventListener('click',async()=>{
   if(!historyMonth.value)return;
@@ -554,7 +456,7 @@ historyMonthButton.addEventListener('click',async()=>{
   history.replaceState(null,'',`/?tab=history-panel&month=${encodeURIComponent(historyMonth.value)}&holding=${historyHolding.value}`);
   historyMonthButton.disabled=true; historyButton.disabled=true; historyMessage.className='run-message'; historyMessage.textContent='과거 월간 테스트 중입니다.';
   try{
-    const response=await fetch('/api/run-month',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({month:historyMonth.value,holding_sessions:Number(historyHolding.value),strategy_version:historyStrategy.value,profit_target:historyProfitTarget.value||null,stop_loss:historyStopLoss.value||null,entry_mode:historyEntryMode.value,entry_minimum:historyEntryMinimum.value||null,entry_limit:historyEntryLimit.value})});
+    const response=await fetch('/api/run-month',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({month:historyMonth.value,holding_sessions:Number(historyHolding.value),strategy_version:historyStrategy.value,profit_target:historyProfitTarget.value||null,stop_loss:historyStopLoss.value||null,entry_mode:'OPEN'})});
     const result=await response.json();
     if(!response.ok)throw new Error(result.message||'월간 테스트에 실패했습니다.');
     sessionStorage.setItem('titan-history-result-period',historyMonth.value);
@@ -569,9 +471,6 @@ const H=D.historical||{trades:[],total:0,wins:0};
 function renderHistoricalPeriod(period){
   const holding=Number(historyHolding.value);
   const strategy=historyStrategy.value;
-  const entryMode=historyEntryMode.value;
-  const entryMinimum=historyEntryMinimum.value===''?null:Number(historyEntryMinimum.value)/100;
-  const entryLimit=Number(historyEntryLimit.value)/100;
   const requestedTarget=historyProfitTarget.value===''?null:Number(historyProfitTarget.value)/100;
   const requestedStop=historyStopLoss.value===''?null:Number(historyStopLoss.value)/100;
   const targetExit=requestedTarget!==null||strategy.includes('TP5');
@@ -580,7 +479,7 @@ function renderHistoricalPeriod(period){
     if(strategy.includes('TP5'))return x.profit_target==null||(Math.abs(Number(x.profit_target)-.05)<1e-9&&Math.abs(Number(x.stop_loss)-.10)<1e-9);
     return x.profit_target==null;
   };
-  const entryMatch=x=>(x.entry_mode||'OPEN')===entryMode&&(entryMode==='OPEN'||(Math.abs(Number(x.entry_limit)-entryLimit)<1e-9&&(entryMinimum===null?x.entry_minimum==null:Math.abs(Number(x.entry_minimum)-entryMinimum)<1e-9)));
+  const entryMatch=x=>(x.entry_mode||'OPEN')==='OPEN';
   const cohortOf=x=>x.cohort||'SELECTED';
   const matchingTrades=(H.trades||[]).filter(x=>x.selection_date.startsWith(period)&&(targetExit?Number(x.evaluation_horizon||20)===holding:Number(x.holding_sessions||1)===holding)&&(x.strategy_version||'V1.1')===strategy&&ratesMatch(x)&&entryMatch(x));
   const tradeByIdentity=new Map();
@@ -608,6 +507,8 @@ function renderHistoricalPeriod(period){
   const completedCount=candidateRows.filter(x=>tradeByCandidate.has(`${x.cohort}|${x.selection_date}|${x.code}`)).length;
   document.querySelector('#history-candidate-note').textContent=`${period} · ${canonicalRuns.length}거래일 · 매수 선정 ${selectedCount}건 · 관찰 ${observationCount}건 · 거래 완료 ${completedCount}건`;
   document.querySelector('#history-candidates').innerHTML=candidateRows.length?'<table><thead><tr><th>선정일</th><th>구분</th><th>종목</th><th>점수</th><th>매수일</th><th>매수가</th><th>매도일</th><th>매도가</th><th>보유</th><th>순수익률</th><th>상태</th><th>최신 종가 (매도가 대비)</th></tr></thead><tbody>'+candidateRows.slice().reverse().map(x=>{const t=tradeByCandidate.get(`${x.cohort}|${x.selection_date}|${x.code}`);const p=(D.latest_prices||{})[x.code];const sinceExit=t&&p&&Number(t.sell_price)?Number(p.close)/Number(t.sell_price)-1:null;const latestLabel=p?`${Number(p.close).toLocaleString()}${sinceExit==null?'':` (${sinceExit>=0?'+':''}${(sinceExit*100).toFixed(1)}%)`}`:'—';return `<tr><td>${x.selection_date}</td><td>${x.cohort==='SELECTED'?'매수 선정':'관찰'}</td><td>${x.name} (${x.code})</td><td><strong>${x.total_score}</strong></td><td>${t?(t.buy_date||t.trade_date):'—'}</td><td>${t?Number(t.buy_price).toLocaleString():'—'}</td><td>${t?(t.sell_date||t.trade_date):'—'}</td><td>${t?Number(t.sell_price).toLocaleString():'—'}</td><td>${t?`${t.holding_sessions||holding}일`:'—'}</td><td class="${t?(t.win?'good':'bad'):''}">${t?pct(t.net_return):'—'}</td><td class="${t?(t.win?'good':'bad'):'watch'}">${t?(t.win?'수익':'손실'):'미체결'}</td><td class="${sinceExit==null?'':(sinceExit>=0?'good':'bad')}"><strong>${latestLabel}</strong></td></tr>`}).join('')+'</tbody></table>':`<div class="empty">${period}에는 해당 조건의 선정·관찰 후보가 없습니다.</div>`;
+  const renderedCandidateRows=candidateRows.slice().reverse();
+  document.querySelectorAll('#history-candidates tbody tr').forEach((row,index)=>{const candidate=renderedCandidateRows[index];const identity=`${candidate.cohort}|${candidate.selection_date}|${candidate.code}`;if(tradeByCandidate.has(identity))return;const key=`${candidate.selection_date}|${candidate.code}`;const stored=(D.selection_entry_prices||{})[key];const live=(window.__operationalPrices||{})[candidate.code];const liveDate=live?entryDateLabel(live.date):'';const entry=stored||(live&&live.open!=null&&liveDate>candidate.selection_date?{date:liveDate,open:live.open}:null);const prior=(D.selection_prices||{})[key];if(!entry||prior==null)return;const gap=Number(entry.open)/Number(prior)-1;if(Math.abs(gap)>.03){row.children[10].textContent=`진입 제외 (${pct(gap)})`;row.children[10].className='bad';return}row.children[4].textContent=entryDateLabel(entry.date);row.children[5].textContent=Number(entry.open).toLocaleString();row.children[10].textContent='평가 대기';row.children[10].className='watch'});
   const trades=historyCohort.value==='COMPARE'?periodTrades:periodTrades.filter(x=>cohortOf(x)===historyCohort.value);
   const wins=trades.filter(x=>x.win).length;
   const average=trades.length?trades.reduce((sum,x)=>sum+x.net_return,0)/trades.length:null;
@@ -763,7 +664,13 @@ const viewedRuns=operationalViewDate
   ?operationalRuns.filter(x=>x.as_of&&x.as_of.slice(0,10)===operationalViewDate)
   :[];
 const L=viewedRuns.length?viewedRuns[viewedRuns.length-1]:D.latest;
-const operationalPrices={...(D.latest_prices||{})};
+let cachedOperationalPrices={};
+try{cachedOperationalPrices=JSON.parse(localStorage.getItem('titan-operational-prices')||'{}')}catch(_){cachedOperationalPrices={}}
+const currentSelectionDate=L&&L.as_of?L.as_of.slice(0,10):'';
+const validCachedOperationalPrices=Object.fromEntries(Object.entries(cachedOperationalPrices).filter(([,price])=>entryDateLabel(price&&price.date)>currentSelectionDate));
+const operationalPrices={...(D.latest_prices||{}),...validCachedOperationalPrices};
+window.__operationalPrices=operationalPrices;
+renderHistoricalPeriod(currentHistoricalPeriod());
 const O=D.operational_strategy||{};
 document.querySelector('#operational-label').textContent=O.label||'—';
 document.querySelector('#operational-version').textContent=O.version||'—';
@@ -781,13 +688,13 @@ if(!L){
 }else if(operationalViewDate&&L.as_of.slice(0,10)===operationalViewDate&&operationalViewDate!==latestKisTestDate()){
   todayAction.textContent=`${L.as_of.slice(0,10)} 선정 결과 ${L.selected_candidates.length}종목`;
   todayAction.className='big good';
-  todayActionDetail.textContent=`과거 기준일 조회 결과입니다. 선정 종목은 다음 거래일 10시 매수 검토 대상입니다.`;
+  todayActionDetail.textContent=`과거 기준일 조회 결과입니다. 선정 종목은 다음 거래일 시가 갭 ±3% 이내에서 진입하는 기준입니다.`;
 }else{
   const now=new Date();
-  const beforeTen=now.getHours()<10;
-  todayAction.textContent=beforeTen?'10시 매수 조건 대기':'10시 가격 확인 필요';
+  const beforeOpen=now.getHours()<9;
+  todayAction.textContent=beforeOpen?'시가 진입 대기':'시가 갭 확인 중';
   todayAction.className='big watch';
-  todayActionDetail.textContent=`${L.as_of.slice(0,10)} 선정 ${L.selected_candidates.length}종목 · 전일 종가 대비 +3% 이하만 수동 승인합니다.`;
+  todayActionDetail.textContent=`${L.as_of.slice(0,10)} 선정 ${L.selected_candidates.length}종목 · 다음 거래일 시가 갭 절댓값 3% 이내만 진입 기준을 충족합니다.`;
 }
 const positionCode=document.querySelector('#position-code');
 const positionName=document.querySelector('#position-name');
@@ -840,13 +747,22 @@ for(const [id,val] of Object.entries({
 const sourceLabel=latestSource==='LOCAL_KRX'?'로컬 KRX':latestSource==='KIS'?'KIS 조회':latestSource||'출처 미상';
 const executedAt=L&&L.executed_at?new Date(L.executed_at).toLocaleString('ko-KR'):'실행 시각 미상';
 document.querySelector('#selected-note').textContent=latestDate?`${latestDate} 기준 · ${sourceLabel} · 실행 ${executedAt} · V1 매수 기준 통과`:'V1 매수 기준을 모두 통과한 후보';
-document.querySelector('#observed-note').textContent=latestDate?`${latestDate} 기준 · ${sourceLabel} · 실행 ${executedAt} · 70–79점 추적군`:'70–79점의 비추천 추적군';
-const observationShadow=D.observation_shadow||{trades:[]};
-const observationTradeByCode=new Map((observationShadow.trades||[]).map(x=>[x.code,x]));
-function candidates(items,asOf,isObservation=false){if(!items||!items.length)return '<div class="empty">해당 종목이 없습니다.</div>';return '<table><thead><tr><th>선정 기준일</th><th>순위</th><th>코드</th><th>종목명</th><th>현재가</th><th>조회 기준</th>'+(isObservation?'<th>가정 진입시각</th><th>가정 진입가</th><th>가정 수익률</th><th>추적 상태</th>':'')+'<th>선정일 대비</th><th>선정일 시장대비</th><th>총점</th><th>추세</th><th>모멘텀</th><th>거래량</th><th>가격</th><th>위험</th><th>Context</th></tr></thead><tbody>'+items.map(x=>{const p=operationalPrices[x.code];const t=isObservation?observationTradeByCode.get(x.code):null;const selectionClose=(D.selection_prices||{})[`${asOf}|${x.code}`];const change=p&&selectionClose!=null?Number(p.close)/Number(selectionClose)-1:null;const hypotheticalReturn=t&&t.entry_price?(Number(t.net_return!=null?t.exit_price:(p&&p.close||t.latest_price))/Number(t.entry_price)-1):null;const tracking=t?(t.net_return==null?'추적 중':(t.win?'완료·수익':'완료·손실')):'진입 대기';const entryTime=t?new Date(t.entry_time).toLocaleTimeString('ko-KR'):'—';const excess=asOf===(D.market_breadth||{}).date?(D.latest_excess_returns||{})[x.code]:null;const changeLabel=change!=null?pct(change):'—';const changeClass=change!=null?(change>=0?'good':'bad'):'';const priceTime=p&&p.source==='KIS_REALTIME'&&p.time?new Date(p.time).toLocaleTimeString('ko-KR'):(p?p.date:'—');return `<tr><td>${asOf||'—'}</td><td>${x.rank}</td><td>${x.code}</td><td>${x.name}</td><td><strong>${p?Number(p.close).toLocaleString():'—'}</strong></td><td>${priceTime}</td>${isObservation?`<td>${entryTime}</td><td>${t?Number(t.entry_price).toLocaleString():'—'}</td><td class="${hypotheticalReturn==null?'':(hypotheticalReturn>=0?'good':'bad')}">${pct(hypotheticalReturn)}</td><td class="${t?(t.net_return==null?'watch':(t.win?'good':'bad')):'watch'}">${tracking}</td>`:''}<td class="${changeClass}">${changeLabel}</td><td class="${excess==null?'':(excess>=0?'good':'bad')}">${pct(excess)}</td><td><strong>${x.total_score}</strong></td><td>${x.trend_score}</td><td>${x.momentum_score}</td><td>${x.volume_score}</td><td>${x.price_action_score}</td><td>${x.risk_score}</td><td>${x.context_score}</td></tr>`}).join('')+'</tbody></table>'}
+document.querySelector('#observed-note').textContent=latestDate?`${latestDate} 기준 · ${sourceLabel} · 실행 ${executedAt} · 70–79점 비추천 참고군`:'70–79점의 비추천 참고군';
+function entryDateLabel(value){const text=String(value||'');return /^\d{8}$/.test(text)?`${text.slice(0,4)}-${text.slice(4,6)}-${text.slice(6,8)}`:text||'—'}
+function candidates(items,asOf,isObservation=false){if(!items||!items.length)return '<div class="empty">해당 종목이 없습니다.</div>';const entryDateHeading=isObservation?'가정 진입일':'진입일';const openHeading=isObservation?'가정 진입 시가':'시가';return `<table><thead><tr><th>선정 기준일</th><th>순위</th><th>코드</th><th>종목명</th><th>${entryDateHeading}</th><th>${openHeading}</th><th>시가 갭</th><th>진입 상태</th><th>현재가</th><th>시가 기준 예상 수익률</th><th>조회 기준</th><th>선정일 대비</th><th>선정일 시장대비</th><th>총점</th><th>추세</th><th>모멘텀</th><th>거래량</th><th>가격</th><th>위험</th><th>Context</th></tr></thead><tbody>`+items.map(x=>{const p=operationalPrices[x.code];const selectionClose=(D.selection_prices||{})[`${asOf}|${x.code}`];const openPrice=p&&p.open!=null?Number(p.open):null;const entryDate=openPrice!=null?entryDateLabel(p.date):'—';const openingGap=openPrice!=null&&selectionClose!=null?openPrice/Number(selectionClose)-1:null;const openReturn=openPrice!=null&&p&&p.close!=null?Number(p.close)/openPrice-1:null;const entryAllowed=openingGap!=null&&Math.abs(openingGap)<=.03;const entryStatus=isObservation?'관찰 대상':openingGap==null?'시가 확인 전':entryAllowed?'진입 조건 충족':'진입 제외';const entryClass=isObservation||openingGap==null?'watch':entryAllowed?'good':'bad';const change=p&&selectionClose!=null?Number(p.close)/Number(selectionClose)-1:null;const excess=asOf===(D.market_breadth||{}).date?(D.latest_excess_returns||{})[x.code]:null;const changeLabel=change!=null?pct(change):'—';const changeClass=change!=null?(change>=0?'good':'bad'):'';const priceTime=p&&p.source==='KIS_REALTIME'&&p.time?new Date(p.time).toLocaleTimeString('ko-KR'):(p?p.date:'—');return `<tr><td>${asOf||'—'}</td><td>${x.rank}</td><td>${x.code}</td><td>${x.name}</td><td>${entryDate}</td><td><strong>${openPrice==null?'—':openPrice.toLocaleString()}</strong></td><td class="${openingGap==null?'':(entryAllowed?'good':'bad')}">${pct(openingGap)}</td><td class="${entryClass}">${entryStatus}</td><td><strong>${p?Number(p.close).toLocaleString():'—'}</strong></td><td class="${openReturn==null?'':(openReturn>=0?'good':'bad')}"><strong>${pct(openReturn)}</strong></td><td>${priceTime}</td><td class="${changeClass}">${changeLabel}</td><td class="${excess==null?'':(excess>=0?'good':'bad')}">${pct(excess)}</td><td><strong>${x.total_score}</strong></td><td>${x.trend_score}</td><td>${x.momentum_score}</td><td>${x.volume_score}</td><td>${x.price_action_score}</td><td>${x.risk_score}</td><td>${x.context_score}</td></tr>`}).join('')+'</tbody></table>'}
+function updateOpenEntryAction(){if(!L||(operationalViewDate&&operationalViewDate!==latestKisTestDate()))return;const selected=L.selected_candidates||[];if(!selected.length)return;const evaluated=selected.map(x=>{const p=operationalPrices[x.code];const prior=(D.selection_prices||{})[`${latestDate}|${x.code}`];return p&&p.open!=null&&prior!=null?Number(p.open)/Number(prior)-1:null});const known=evaluated.filter(x=>x!==null);if(!known.length)return;const allowed=known.filter(x=>Math.abs(x)<=.03).length;const excluded=known.length-allowed;todayAction.textContent=`시가 진입 조건 충족 ${allowed}종목`;todayAction.className=`big ${allowed?'good':'bad'}`;todayActionDetail.textContent=`확인 ${known.length}종목 · 시가 갭 ±3% 초과 제외 ${excluded}종목 · 과거 성과와 동일한 시가 기준입니다.`}
+function applyStoredEntryPrices(items){(items||[]).forEach(x=>{const entry=(D.selection_entry_prices||{})[`${latestDate}|${x.code}`];if(!entry)return;operationalPrices[x.code]={...(operationalPrices[x.code]||{}),open:Number(entry.open),date:entry.date}})}
+function removeMarketRelativeColumn(container){container.querySelectorAll('tr').forEach(row=>row.children[12]?.remove())}
 function renderOperationalCandidates(){
-  document.querySelector('#selected').innerHTML=candidates(L&&L.selected_candidates,latestDate);
-  document.querySelector('#observed').innerHTML=candidates(L&&L.observation_candidates,latestDate,true);
+  applyStoredEntryPrices(L&&L.selected_candidates);
+  applyStoredEntryPrices(L&&L.observation_candidates);
+  const selectedContainer=document.querySelector('#selected');
+  const observedContainer=document.querySelector('#observed');
+  selectedContainer.innerHTML=candidates(L&&L.selected_candidates,latestDate);
+  observedContainer.innerHTML=candidates(L&&L.observation_candidates,latestDate,true);
+  removeMarketRelativeColumn(selectedContainer);
+  removeMarketRelativeColumn(observedContainer);
+  updateOpenEntryAction();
 }
 renderOperationalCandidates();
 const newsPanel=document.querySelector('#news-panel');
@@ -897,9 +813,11 @@ async function refreshOperationalPrices(){
     const result=await jsonResponse(response);
     if(!response.ok)throw new Error(result.message||'현재가 조회 실패');
     Object.assign(operationalPrices,result.prices||{});
+    localStorage.setItem('titan-operational-prices',JSON.stringify(result.prices||{}));
     renderOperationalCandidates();
+    renderHistoricalPeriod(currentHistoricalPeriod());
     status.className='sub good';
-    status.textContent=`KIS 현재가 · ${new Date().toLocaleTimeString('ko-KR')} 갱신${result.entry_snapshot_saved?' · S80 10시 모의진입 저장':''}`;
+    status.textContent=`KIS 시가·현재가 · ${new Date().toLocaleTimeString('ko-KR')} 갱신`;
   }catch(error){
     status.className='sub watch';
     status.textContent=`로컬 최신 종가 표시 중 · ${error.message}`;

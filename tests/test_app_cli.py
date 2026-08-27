@@ -207,11 +207,13 @@ class AppCliTest(unittest.TestCase):
             "krx-universe-build",
             "--raw-dir", "output/krx_raw",
             "--output-dir", "output/universe_staging",
+            "--base-universe-dir", "resources/market",
         ])
 
         self.assertEqual("krx-universe-collect", collect.command)
         self.assertEqual(5000, collect.max_requests)
         self.assertEqual("krx-universe-build", build.command)
+        self.assertEqual(Path("resources/market"), build.base_universe_dir)
 
     def test_parses_kis_pilot_command(self) -> None:
         args = build_parser().parse_args([

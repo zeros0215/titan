@@ -60,6 +60,36 @@ class LocalTargetStopExitTest(unittest.TestCase):
         self.assertEqual(101, result[1])
         self.assertEqual(20, result[2])
 
+    def test_resolves_target_before_incomplete_holding_period(self):
+        sessions = self.sessions[:3]
+        candles = {
+            sessions[1]: SimpleNamespace(high=104, low=99, close=102),
+            sessions[2]: SimpleNamespace(high=106, low=101, close=105),
+        }
+
+        result = _target_stop_exit(
+            sessions, 0, candles, 100, .05, .10, 20,
+            allow_incomplete=True,
+        )
+
+        self.assertEqual("PROFIT_TARGET_5", result[3])
+        self.assertEqual(105, result[1])
+        self.assertEqual(2, result[2])
+
+    def test_keeps_unresolved_incomplete_trade_pending(self):
+        sessions = self.sessions[:3]
+        candles = {
+            value: SimpleNamespace(high=104, low=96, close=101)
+            for value in sessions[1:]
+        }
+
+        result = _target_stop_exit(
+            sessions, 0, candles, 100, .05, .10, 20,
+            allow_incomplete=True,
+        )
+
+        self.assertIsNone(result)
+
 
 if __name__ == "__main__":
     unittest.main()

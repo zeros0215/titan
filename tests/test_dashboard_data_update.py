@@ -3,6 +3,7 @@ from datetime import date, datetime
 
 from tools.kis_dashboard_server import (
     _latest_completed_weekday,
+    _next_collection_date,
     _parse_operational_selection_date,
     _parse_entry_settings,
     _parse_exit_rates,
@@ -89,6 +90,20 @@ class DashboardDataUpdateTest(unittest.TestCase):
         self.assertEqual(
             2,
             _weekdays_between(date(2026, 7, 24), date(2026, 7, 28)),
+        )
+
+    def test_skips_a_source_that_already_reached_the_target(self) -> None:
+        self.assertIsNone(
+            _next_collection_date(date(2026, 8, 26), date(2026, 8, 26))
+        )
+        self.assertIsNone(
+            _next_collection_date(date(2026, 8, 27), date(2026, 8, 26))
+        )
+
+    def test_starts_after_source_coverage_when_dates_are_missing(self) -> None:
+        self.assertEqual(
+            date(2026, 8, 25),
+            _next_collection_date(date(2026, 8, 24), date(2026, 8, 26)),
         )
 
 

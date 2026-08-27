@@ -11,6 +11,7 @@ from universe_history.krx import (
     KrxUniverseCollector,
 )
 from universe_history.krx_normalizer import KrxSnapshotNormalizer
+from universe_history.model import UniverseHistoryRecord
 
 
 class _Client:
@@ -115,6 +116,53 @@ class KrxUniverseTest(unittest.TestCase):
             records = KrxSnapshotNormalizer().normalize(Path(temporary))
 
         self.assertEqual(["123456"], [item.code for item in records])
+
+    def test_incremental_normalizer_reads_only_new_snapshots(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            repository = KrxRawRepository(root)
+            self._save(repository, date(2026, 8, 25), "KOSDAQ", True)
+            self._save(repository, date(2026, 8, 25), "KOSPI", False)
+            self._save(repository, date(2026, 8, 26), "KOSDAQ", False)
+            self._save(repository, date(2026, 8, 26), "KOSPI", True)
+            base = [UniverseHistoryRecord(
+                code="123456",
+                name="Fixture",
+                market=MarketType.KOSDAQ,
+                effective_from=date(2020, 1, 1),
+                effective_to=None,
+                source_id="KRX_OPEN_API_ISSUE_BASE_INFO",
+            )]
+
+            records = KrxSnapshotNormalizer().normalize_incremental(
+                root, base, date(2026, 8, 24)
+            )
+
+        kosdaq = next(item for item in records if item.market is MarketType.KOSDAQ)
+        kospi = next(item for item in records if item.market is MarketType.KOSPI)
+        self.assertEqual(date(2020, 1, 1), kosdaq.effective_from)
+        self.assertEqual(date(2026, 8, 25), kosdaq.effective_to)
+        self.assertEqual(date(2026, 8, 26), kospi.effective_from)
+        self.assertIsNone(kospi.effective_to)
+
+    def test_incremental_hash_ignores_files_before_delta_start(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            repository = KrxRawRepository(root)
+            self._save(repository, date(2026, 8, 24), "KOSPI", True)
+            self._save(repository, date(2026, 8, 25), "KOSPI", True)
+            first = repository.content_sha256(
+                start=date(2026, 8, 25), seed="a" * 64
+            )
+            repository.path_for(date(2026, 8, 24), "KOSPI").write_text(
+                "changed historical file", encoding="utf-8"
+            )
+
+            second = repository.content_sha256(
+                start=date(2026, 8, 25), seed="a" * 64
+            )
+
+        self.assertEqual(first, second)
 
     @staticmethod
     def _save(repository, value, market, present):

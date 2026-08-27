@@ -5,9 +5,7 @@ from pathlib import Path
 from pilot.history import PilotHistoryRepository, PilotReadinessEvaluator
 from analysis.event_shadow import (
     load_event_runs,
-    summarize_observation_shadow,
     summarize_event_shadow,
-    summarize_operational_shadow,
 )
 
 
@@ -17,7 +15,6 @@ MANUAL_OUTPUT = ROOT / "output" / "kis_manual_tests"
 INDUSTRY_RS_OUTPUT = ROOT / "output" / "industry_rs"
 PRE_BREAKOUT_OUTPUT = ROOT / "output" / "pre_breakout"
 EVENT_OUTPUT = ROOT / "output" / "event_candidates" / "runs"
-OPERATIONAL_ENTRY_OUTPUT = OUTPUT / "entry_snapshots"
 TEMPLATE = ROOT / "dashboard" / "index.template.html"
 SITE_INDEX = ROOT / "dashboard" / "index.html"
 LOCAL_INDEX = OUTPUT / "dashboard.html"
@@ -116,12 +113,12 @@ def _load_market_breadth(price_dir: Path | None, limit: int = 100) -> dict:
     }
 
 
-def _load_selection_prices(
+def _load_selection_and_entry_prices(
     price_dir: Path | None, runs: list[dict]
-) -> dict[str, float]:
-    """Load each operational candidate's close on its selection date."""
+) -> tuple[dict[str, float], dict[str, dict[str, object]]]:
+    """Load the selection close and the following session's opening price."""
     if price_dir is None:
-        return {}
+        return {}, {}
     requested: dict[str, set[str]] = {}
     for run in runs:
         selection_date = str(run.get("as_of") or "")[:10]
@@ -132,7 +129,8 @@ def _load_selection_prices(
                 code = str(candidate.get("code") or "").zfill(6)
                 if code:
                     requested.setdefault(code, set()).add(selection_date)
-    result = {}
+    selection_prices = {}
+    entry_prices = {}
     for code, dates in requested.items():
         path = price_dir / f"{code}.json"
         try:
@@ -141,15 +139,22 @@ def _load_selection_prices(
             )
         except (OSError, TypeError, json.JSONDecodeError):
             continue
-        for candle in candles:
+        for index, candle in enumerate(candles):
             candle_date = str(candle.get("date") or "")[:10]
             if candle_date not in dates:
                 continue
             try:
-                result[f"{candle_date}|{code}"] = float(candle["close"])
+                key = f"{candle_date}|{code}"
+                selection_prices[key] = float(candle["close"])
+                if index + 1 < len(candles):
+                    following = candles[index + 1]
+                    entry_prices[key] = {
+                        "date": str(following["date"])[:10],
+                        "open": float(following["open"]),
+                    }
             except (KeyError, TypeError, ValueError):
                 pass
-    return result
+    return selection_prices, entry_prices
 
 
 def main() -> None:
@@ -278,15 +283,9 @@ def main() -> None:
             and market_breadth.get("equal_weight_return") is not None
         )
     }
-    selection_prices = _load_selection_prices(
+    selection_prices, selection_entry_prices = _load_selection_and_entry_prices(
         active_price_dir,
-        [
-            run for run in runs
-            if (
-                run.get("run_type") == "OFFICIAL"
-                and run.get("strategy_version") == operational_version
-            )
-        ],
+        runs,
     )
     industry_rs_path = INDUSTRY_RS_OUTPUT / "industry_rs_validation.json"
     industry_rs = (
@@ -315,13 +314,6 @@ def main() -> None:
         event_runs,
         active_price_dir,
     )
-    operational_entry_runs = load_event_runs(OPERATIONAL_ENTRY_OUTPUT)
-    operational_shadow = summarize_operational_shadow(
-        operational_entry_runs, active_price_dir,
-    )
-    observation_shadow = summarize_observation_shadow(
-        operational_entry_runs, active_price_dir,
-    )
     research_manifest_path = (
         ROOT / "output" / "strategy_research" / "candidates" / "manifest.json"
     )
@@ -334,90 +326,6 @@ def main() -> None:
         research_ranking_path.read_text(encoding="utf-8")
         if research_ranking_path.exists() else ""
     )
-    challenger_portfolio_path = (
-        ROOT / "output" / "strategy_research" / "challenger_portfolio.md"
-    )
-    challenger_portfolio = (
-        challenger_portfolio_path.read_text(encoding="utf-8")
-        if challenger_portfolio_path.exists() else ""
-    )
-    challenger_robustness_path = (
-        ROOT / "output" / "strategy_research" / "challenger_robustness.md"
-    )
-    challenger_robustness = (
-        challenger_robustness_path.read_text(encoding="utf-8")
-        if challenger_robustness_path.exists() else ""
-    )
-    stress_path = ROOT / "output" / "strategy_research" / "challenger_stress_diagnostics-hist2020.md"
-    challenger_stress = (
-        stress_path.read_text(encoding="utf-8") if stress_path.exists() else ""
-    )
-    shadow_state_path = ROOT / "output" / "strategy_shadow" / "ac43_state.json"
-    shadow_state = (
-        json.loads(shadow_state_path.read_text(encoding="utf-8"))
-        if shadow_state_path.exists() else {}
-    )
-    weekly_snapshot_path = ROOT / "output" / "strategy_shadow" / "weekly_snapshots" / "latest.md"
-    weekly_snapshot_report = (
-        weekly_snapshot_path.read_text(encoding="utf-8")
-        if weekly_snapshot_path.exists() else ""
-    )
-    weekly_snapshot_json = weekly_snapshot_path.with_suffix(".json")
-    weekly_snapshot = (
-        json.loads(weekly_snapshot_json.read_text(encoding="utf-8"))
-        if weekly_snapshot_json.exists() else {}
-    )
-    audit_json_path = ROOT / "output" / "strategy_research" / "ac43_audit.json"
-    audit_summary = (
-        json.loads(audit_json_path.read_text(encoding="utf-8"))
-        if audit_json_path.exists() else {}
-    )
-    replay_dir = ROOT / "output" / "strategy_shadow" / "replays"
-    shadow_replays = []
-    for replay_path in sorted(replay_dir.glob("*.json"), reverse=True)[:12]:
-        replay = json.loads(replay_path.read_text(encoding="utf-8"))
-        shadow_replays.append({
-            "file": replay_path.name,
-            "replay": replay.get("replay", {}),
-            "summary": replay.get("summary", {}),
-        })
-    weekday_dir = ROOT / "output" / "strategy_shadow" / "weekday_tests"
-    weekday_summaries = sorted(weekday_dir.glob("*-summary.json"), reverse=True)
-    weekday_sensitivity = (
-        json.loads(weekday_summaries[0].read_text(encoding="utf-8"))
-        if weekday_summaries else {}
-    )
-    event_g_portfolio_path = ROOT / "output" / "strategy_research" / "event_g_portfolio.md"
-    event_g_stress_path = ROOT / "output" / "strategy_research" / "event_g_stress.md"
-    event_g_report = "\n\n".join(
-        path.read_text(encoding="utf-8")
-        for path in (event_g_portfolio_path, event_g_stress_path)
-        if path.exists()
-    )
-    monthly_rs_paths = (
-        ROOT / "output" / "strategy_research" / "monthly_rs_low_vol.md",
-        ROOT / "output" / "strategy_research" / "monthly_rs_defensive_i2.md",
-    )
-    monthly_rs_report = "\n\n".join(
-        path.read_text(encoding="utf-8")
-        for path in monthly_rs_paths if path.exists()
-    )
-    unified_path = ROOT / "output" / "strategy_research" / "unified_scorecard.md"
-    unified_report = unified_path.read_text(encoding="utf-8") if unified_path.exists() else ""
-    adaptive_path = ROOT / "output" / "strategy_research" / "adaptive_momentum_j.md"
-    adaptive_report = adaptive_path.read_text(encoding="utf-8") if adaptive_path.exists() else ""
-    horizon_path = ROOT / "output" / "strategy_research" / "ac_holding_horizons.md"
-    horizon_report = horizon_path.read_text(encoding="utf-8") if horizon_path.exists() else ""
-    intraday_exit_path = ROOT / "output" / "morning_entry" / "exit_coverage" / "intraday_exit_coverage.md"
-    intraday_exit_report = intraday_exit_path.read_text(encoding="utf-8") if intraday_exit_path.exists() else ""
-    exit_bounds_path = ROOT / "output" / "morning_entry" / "exit_bounds" / "s80_exit_bounds.md"
-    exit_bounds_report = exit_bounds_path.read_text(encoding="utf-8") if exit_bounds_path.exists() else ""
-    no_progress_path = ROOT / "output" / "morning_entry" / "no_progress" / "s80_no_progress.md"
-    no_progress_report = no_progress_path.read_text(encoding="utf-8") if no_progress_path.exists() else ""
-    entry_layers_path = ROOT / "output" / "morning_entry" / "entry_layers" / "s80_entry_layers.md"
-    entry_layers_report = entry_layers_path.read_text(encoding="utf-8") if entry_layers_path.exists() else ""
-    audit_path = ROOT / "output" / "strategy_research" / "ac43_audit.md"
-    audit_report = audit_path.read_text(encoding="utf-8") if audit_path.exists() else ""
     data = {
         "generated_at": datetime.now().astimezone().isoformat(
             timespec="seconds"
@@ -428,25 +336,6 @@ def main() -> None:
         },
         "market_breadth": market_breadth,
         "latest_excess_returns": latest_excess_returns,
-        "operational_shadow": operational_shadow,
-        "observation_shadow": observation_shadow,
-        "strategy_research": {
-            "challenger_robustness_markdown": challenger_robustness,
-            "challenger_stress_markdown": challenger_stress,
-            "shadow_state": shadow_state,
-            "weekly_snapshot_report": weekly_snapshot_report,
-            "weekly_snapshot": weekly_snapshot,
-            "shadow_replays": shadow_replays,
-            "weekday_sensitivity": weekday_sensitivity,
-            "unified_scorecard": unified_report,
-            "holding_horizon_report": horizon_report,
-            "intraday_exit_coverage_report": intraday_exit_report,
-            "s80_exit_bounds_report": exit_bounds_report,
-            "s80_no_progress_report": no_progress_report,
-            "s80_entry_layers_report": entry_layers_report,
-            "ac43_audit_report": audit_report,
-            "ac43_audit": audit_summary,
-        },
         "readiness": {
             "status": readiness.status,
             "observed_days": readiness.observed_days,
@@ -458,10 +347,11 @@ def main() -> None:
         "operational_strategy": {
             "version": operational_version,
             "label": "S80 모의 운영",
-            "summary": "80점 이상 · 최대 7종목 · 다음 날 10시 · 전일 종가 대비 +3% 이하 · 익절 +5% · 손절 -10% · 최대 20거래일",
+            "summary": "80점 이상 · 최대 7종목 · 다음 거래일 시가 · 시가 갭 ±3% 이내 · 익절 +5% · 손절 -10% · 최대 20거래일",
         },
         "latest_prices": latest_prices,
         "selection_prices": selection_prices,
+        "selection_entry_prices": selection_entry_prices,
         "runs": runs,
         "operational_runs": [
             run for run in runs

@@ -65,6 +65,7 @@ def run_year(
     entry_mode: str = "OPEN",
     entry_limit: float = 0.03,
     entry_minimum: float | None = None,
+    progress_callback=None,
 ) -> list[dict[str, object]]:
     try:
         year_start = datetime.strptime(year, "%Y")
@@ -80,6 +81,7 @@ def run_year(
         entry_mode=entry_mode,
         entry_limit=entry_limit,
         entry_minimum=entry_minimum,
+        progress_callback=progress_callback,
     )
 
 
@@ -124,6 +126,7 @@ def _run_period(
     entry_mode: str = "OPEN",
     entry_limit: float = 0.03,
     entry_minimum: float | None = None,
+    progress_callback=None,
 ) -> list[dict[str, object]]:
     if holding_sessions <= 0:
         raise ValueError("보유기간은 1거래일 이상이어야 합니다.")
@@ -200,7 +203,7 @@ def _run_period(
     results = []
     run_dir = OUTPUT / "runs"
     run_dir.mkdir(parents=True, exist_ok=True)
-    for as_of in session_dates:
+    for progress_index, as_of in enumerate(session_dates, start=1):
         started = perf_counter()
         selection = runner.select(as_of, top_n=selection_limit)
         regime_candidates = (
@@ -222,28 +225,34 @@ def _run_period(
         trades = []
         cost_policy = transaction_cost_policy_from_env()
         session_index = all_session_dates.index(as_of)
-        if session_index + holding_sessions >= len(all_session_dates):
-            future_buy_date = None
-            future_sell_date = None
-        else:
-            future_buy_date = all_session_dates[session_index + 1]
+        future_buy_date = (
+            all_session_dates[session_index + 1]
+            if session_index + 1 < len(all_session_dates)
+            else None
+        )
+        if session_index + holding_sessions < len(all_session_dates):
             future_sell_date = all_session_dates[
                 session_index + holding_sessions
             ]
+        else:
+            future_sell_date = None
         for cohort, candidates in (
             ("SELECTED", selection.selections),
             ("OBSERVATION", selection.observations),
         ):
             for selected in candidates:
-                if future_buy_date is None or future_sell_date is None:
+                if future_buy_date is None:
                     continue
                 candles_by_date = {
                     candle.date: candle
                     for candle in provider._candles(selected.code)
                 }
                 buy_candle = candles_by_date.get(future_buy_date)
-                exit_candle = candles_by_date.get(future_sell_date)
-                if buy_candle is None or exit_candle is None:
+                exit_candle = (
+                    candles_by_date.get(future_sell_date)
+                    if future_sell_date is not None else None
+                )
+                if buy_candle is None:
                     continue
                 selected_close = candles_by_date.get(as_of)
                 buy_price = buy_candle.open
@@ -267,7 +276,7 @@ def _run_period(
                         < selected_close.close * (1 + entry_minimum)
                     ):
                         continue
-                sell_price = exit_candle.close
+                sell_price = exit_candle.close if exit_candle else None
                 trade_holding_sessions = holding_sessions
                 exit_reason = "FIXED_HOLD"
                 entry_gap = (
@@ -291,12 +300,7 @@ def _run_period(
                         profile.maximum_holding_sessions
                         or holding_sessions
                     )
-                    (
-                        exit_candle,
-                        sell_price,
-                        trade_holding_sessions,
-                        exit_reason,
-                    ) = _target_stop_exit(
+                    target_stop_result = _target_stop_exit(
                         all_session_dates,
                         session_index,
                         candles_by_date,
@@ -312,7 +316,18 @@ def _run_period(
                             morning_signal["morning_low"]
                             if morning_signal else None
                         ),
+                        allow_incomplete=True,
                     )
+                    if target_stop_result is None:
+                        continue
+                    (
+                        exit_candle,
+                        sell_price,
+                        trade_holding_sessions,
+                        exit_reason,
+                    ) = target_stop_result
+                elif exit_candle is None:
+                    continue
                 gross_return = sell_price / buy_price - 1.0
                 net_return = cost_policy.net_return(
                     buy_price,
@@ -406,6 +421,8 @@ def _run_period(
             encoding="utf-8",
         )
         results.append(row)
+        if progress_callback is not None:
+            progress_callback(progress_index, len(session_dates))
         print(
             f"{as_of:%Y-%m-%d}: analyzed={row['analyzed_count']} "
             f"selected={row['selection_count']}"
@@ -423,6 +440,7 @@ def _target_stop_exit(
     maximum_holding,
     morning_high=None,
     morning_low=None,
+    allow_incomplete=False,
 ):
     target_price = buy_price * (1 + profit_target)
     stop_price = (
@@ -430,7 +448,11 @@ def _target_stop_exit(
         if stop_loss is not None else None
     )
     final_candle = None
-    for offset in range(1, maximum_holding + 1):
+    available_holding = min(
+        maximum_holding,
+        len(sessions) - signal_index - 1,
+    )
+    for offset in range(1, available_holding + 1):
         candle = candles_by_date.get(sessions[signal_index + offset])
         if candle is None:
             continue
@@ -446,6 +468,8 @@ def _target_stop_exit(
             return candle, target_price, offset, f"PROFIT_TARGET_{profit_target * 100:g}"
     if final_candle is None:
         raise ValueError("최대 보유기간의 가격 데이터가 없습니다.")
+    if allow_incomplete and available_holding < maximum_holding:
+        return None
     return final_candle, final_candle.close, maximum_holding, "MAX_HOLD_20"
 
 
