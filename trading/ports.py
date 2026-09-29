@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Protocol, TYPE_CHECKING
 
 from trading.model import AccountSnapshot, BrokerOrder, BrokerOrderRequest
+
+if TYPE_CHECKING:
+    from trading.journal import IntegrityResult, JournalEvent, JournalRecord
 
 
 class ExecutionBroker(Protocol):
@@ -24,10 +27,8 @@ class ExecutionBroker(Protocol):
 class ExecutionJournal(Protocol):
     """Append-only persistence required before a future order submission."""
 
+    def append(self, event: "JournalEvent") -> "JournalRecord": ...
+
     def has_intent(self, intent_id: str) -> bool: ...
 
-    def record_intent(self, payload: dict) -> None: ...
-
-    def record_risk_decision(self, payload: dict) -> None: ...
-
-    def record_broker_order(self, payload: dict) -> None: ...
+    def verify(self) -> "IntegrityResult": ...

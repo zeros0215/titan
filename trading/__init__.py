@@ -23,6 +23,8 @@ from trading.reconciliation import (
     ReconciliationResult,
     reconcile_account,
 )
+from trading.journal import EventType, JournalEvent, SQLiteExecutionJournal
+from trading.recovery import RecoveredExecutionState, recover_execution_state
 from trading.risk import (
     RiskContext,
     RiskDecision,
@@ -35,18 +37,23 @@ __all__ = [
     "BrokerOrder",
     "BrokerOrderRequest",
     "Fill",
+    "EventType",
     "InternalPortfolioSnapshot",
     "MarketQuote",
+    "JournalEvent",
     "OrderIntent",
     "OrderSide",
     "OrderStatus",
     "OrderType",
     "Position",
     "ReconciliationResult",
+    "RecoveredExecutionState",
     "RiskContext",
     "RiskDecision",
     "RiskLimits",
     "RiskManager",
+    "SQLiteExecutionJournal",
     "TradingMode",
     "reconcile_account",
+    "recover_execution_state",
 ]
