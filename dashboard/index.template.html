@@ -54,7 +54,7 @@
   </section>
   <section class="grid tab-panel" id="kiwoom-paper-panel">
     <article class="card full"><h2>키움 모의투자 운영</h2><div class="sub">V1.3-S80-N7-TP5-SL10-CANDIDATE · KRX · 종목당 1주 · 동시 보유 최대 7종목. 이 화면은 상태 조회 전용이며 주문을 생성하거나 제출하지 않습니다.</div><div class="legend"><span class="status">PAPER · MOCK 전용</span><span>시가 갭 +3% 이하</span><span>익절 +5%</span><span>손절 -10%</span><span>최대 20거래일</span><span>신용·미수·물타기 금지</span></div></article>
-    <article class="card full"><div class="metrics"><div class="tile"><div class="label">키움 연결</div><div class="value" id="kiwoom-paper-connection">—</div></div><div class="tile"><div class="label">신규 주문</div><div class="value" id="kiwoom-paper-orders-allowed">차단</div></div><div class="tile"><div class="label">Kill Switch</div><div class="value" id="kiwoom-paper-kill-switch">활성</div></div><div class="tile"><div class="label">잔고 동기화</div><div class="value" id="kiwoom-paper-reconciliation">미완료</div></div><div class="tile"><div class="label">마지막 동기화</div><div class="value" id="kiwoom-paper-last-sync" style="font-size:16px">—</div></div></div><div class="run-message" id="kiwoom-paper-message" aria-live="polite"></div><div class="runner"><button id="kiwoom-paper-refresh" type="button">상태 새로고침</button></div></article>
+    <article class="card full"><div class="metrics"><div class="tile"><div class="label">키움 연결</div><div class="value" id="kiwoom-paper-connection">—</div></div><div class="tile"><div class="label">신규 주문</div><div class="value" id="kiwoom-paper-orders-allowed">차단</div></div><div class="tile"><div class="label">Kill Switch</div><div class="value" id="kiwoom-paper-kill-switch">활성</div></div><div class="tile"><div class="label">잔고 동기화</div><div class="value" id="kiwoom-paper-reconciliation">미완료</div></div><div class="tile"><div class="label">마지막 동기화</div><div class="value" id="kiwoom-paper-last-sync" style="font-size:16px">—</div></div></div><div class="run-message" id="kiwoom-paper-message" aria-live="polite"></div><div class="runner"><button id="kiwoom-paper-sync" type="button">키움 모의계좌 동기화</button><button id="kiwoom-paper-refresh" type="button">화면 새로고침</button></div></article>
     <article class="card full"><h2>모의계좌 요약</h2><div class="metrics"><div class="tile"><div class="label">주문 가능금액</div><div class="value" id="kiwoom-paper-buying-power">—</div></div><div class="tile"><div class="label">보유 평가금액</div><div class="value" id="kiwoom-paper-market-value">0원</div></div><div class="tile"><div class="label">실현손익</div><div class="value" id="kiwoom-paper-realized">0원</div></div><div class="tile"><div class="label">미실현손익</div><div class="value" id="kiwoom-paper-unrealized">0원</div></div><div class="tile"><div class="label">완료 거래</div><div class="value" id="kiwoom-paper-completed">0</div></div><div class="tile"><div class="label">승률</div><div class="value" id="kiwoom-paper-win-rate">—</div></div></div></article>
     <article class="card full"><h2>오늘의 매수 후보</h2><div class="sub">갭 조건과 위험관리 판정 결과를 함께 표시합니다. 차단된 후보는 주문하지 않습니다.</div><div class="scroll" id="kiwoom-paper-candidates"></div></article>
     <article class="card full"><h2>보유 종목</h2><div class="scroll" id="kiwoom-paper-positions"></div></article>
@@ -150,6 +150,12 @@ async function refreshKiwoomPaper(){
   finally{kiwoomPaperBusy=false;button.disabled=false}
 }
 document.querySelector('#kiwoom-paper-refresh').addEventListener('click',refreshKiwoomPaper);
+document.querySelector('#kiwoom-paper-sync').addEventListener('click',async()=>{
+  const button=document.querySelector('#kiwoom-paper-sync');const message=document.querySelector('#kiwoom-paper-message');button.disabled=true;message.className='run-message';message.textContent='키움 모의계좌를 조회하고 있습니다.';
+  try{const response=await fetch('/api/kiwoom-paper/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});const result=await response.json();if(!response.ok)throw new Error(result.message||result.code||`HTTP ${response.status}`);renderKiwoomPaper(result.state)}
+  catch(error){message.className='run-message error';message.textContent=`동기화 실패: ${error.message}`}
+  finally{button.disabled=false}
+});
 refreshKiwoomPaper();
 setInterval(()=>{if(document.querySelector('#kiwoom-paper-panel').classList.contains('active'))refreshKiwoomPaper()},15000);
 const breakoutDate=document.querySelector('#breakout-date');

@@ -175,6 +175,7 @@ class DashboardOperationsTest(unittest.TestCase):
         self.assertIn("PAPER · MOCK 전용", self.template)
         self.assertIn("이 화면은 상태 조회 전용", self.template)
         self.assertIn("/api/kiwoom-paper/status", self.template)
+        self.assertIn("/api/kiwoom-paper/sync", self.template)
         self.assertIn('id="kiwoom-paper-candidates"', self.template)
         self.assertIn('id="kiwoom-paper-positions"', self.template)
         self.assertIn('id="kiwoom-paper-orders"', self.template)

@@ -65,6 +65,8 @@ from research.paper_grid import (
     stop as stop_paper_grid,
 )
 from trading.paper_dashboard import load_paper_dashboard
+from trading.kiwoom_paper_sync import synchronize_kiwoom_paper_dashboard
+from broker.kiwoom import KiwoomPaperError
 
 
 HOST = "127.0.0.1"
@@ -161,6 +163,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "/api/run-pre-breakout-month",
             "/api/current-prices",
             "/api/paper-grid",
+            "/api/kiwoom-paper/sync",
             "/api/news-headlines",
             "/api/run-event-candidates",
             "/api/run-strategy-comparison",
@@ -191,6 +194,27 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/paper-grid":
             self._paper_grid()
+            return
+        if path == "/api/kiwoom-paper/sync":
+            try:
+                state = synchronize_kiwoom_paper_dashboard(
+                    KIWOOM_PAPER_DASHBOARD
+                )
+            except KiwoomPaperError as error:
+                self._json(503, {
+                    "message": error.message,
+                    "code": error.code,
+                    "state": load_paper_dashboard(KIWOOM_PAPER_DASHBOARD),
+                })
+                return
+            except Exception:
+                self._json(500, {
+                    "message": "키움 모의계좌 상태를 안전하게 게시하지 못했습니다.",
+                    "code": "PAPER_SYNC_INTERNAL_ERROR",
+                    "state": load_paper_dashboard(KIWOOM_PAPER_DASHBOARD),
+                })
+                return
+            self._json(200, {"message": "키움 모의계좌 동기화 완료", "state": state})
             return
         if path == "/api/news-headlines":
             self._news_headlines()
