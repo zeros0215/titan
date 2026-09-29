@@ -1,8 +1,7 @@
 # TITAN 실매매 준비 아키텍처
 
-현재 단계는 증권사 API를 연결하지 않고 주문 도메인, 사전 위험관리 및 계좌
-동기화 경계를 고정한다. `trading` 패키지에는 키움 인증, 시세 조회 또는 주문
-전송 구현이 없다.
+현재 단계는 키움 모의투자 인증과 계좌 조회까지만 연결하고 주문 도메인,
+사전 위험관리 및 계좌 동기화 경계를 고정한다. 키움 주문 전송 구현은 없다.
 
 ## 경계
 
@@ -11,8 +10,9 @@ Strategy / Signal
     -> OrderIntent
     -> RiskManager (기본 거부)
     -> BrokerOrderRequest
+    -> OrderCoordinator (journal first)
     -> ExecutionBroker port
-    -> 향후 별도 증권사 adapter
+    -> 현재 SimulatedExecutionBroker / 향후 키움 모의주문 adapter
 
 Broker AccountSnapshot
     + InternalPortfolioSnapshot
@@ -27,7 +27,11 @@ Broker AccountSnapshot
 - 금액과 가격은 이진 부동소수점 오차를 피하기 위해 `Decimal`을 사용한다.
 - 모든 시각은 timezone-aware여야 한다.
 - 증권사 상태와 로컬 상태가 다르면 `ReconciliationResult.ready=false`다.
-- `ExecutionBroker`는 인터페이스뿐이며 구현되지 않았다.
+- `SimulatedExecutionBroker`는 실계좌나 키움 API를 호출하지 않고 정상 접수,
+  전량·부분 체결, 거부, 접수 후 timeout 및 취소 경쟁 체결을 재현한다.
+- `OrderCoordinator`는 intent, 위험판정 및 제출 시작을 내구성 저널에 기록한
+  뒤에만 브로커를 호출한다. 제출 후 응답이 불명확하면 자동 재시도하지 않는다.
+- 동일 fill ID 통지는 저널 조회로 중복 기록하지 않는다.
 
 ## 실행 저널과 재시작 복구
 
@@ -60,13 +64,13 @@ Broker AccountSnapshot
 
 ## 실매매 활성화 전 남은 필수 작업
 
-1. 모의 증권사 어댑터를 통한 부분체결·취소·응답 유실 테스트
-2. 주문 조정자에서 제출 전 기록과 intent ID 중복 방지를 트랜잭션으로 연결
-3. 거래 세션, 호가 단위, 가격제한폭 및 주문 유형 검증
-4. 운영자 kill switch와 수동 승인 화면
-5. 계좌·미체결·체결 주기 동기화 및 장애 경보
+1. 거래 세션, 호가 단위, 가격제한폭 및 주문 유형 검증
+2. 운영자 kill switch와 수동 승인 화면
+3. 계좌·미체결·체결 주기 동기화 및 장애 경보
+4. 키움 모의 주문 adapter와 조회 기반 주문 상태 복구
+5. 모의투자에서 부분체결·취소·응답 유실 통합 테스트
 6. `PROVISIONAL` 데이터와 후보 전략의 정식 승격
-7. 위 조건 완료 후에만 별도 키움 어댑터 구현
+7. 위 조건 완료 후에만 별도 실전 활성화 심사
 
 실계좌 주문은 이 문서의 경계가 존재한다는 이유만으로 허용되지 않는다.
 현재 운영 상태는 계속 주문 0건이다.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol, TYPE_CHECKING
 
-from trading.model import AccountSnapshot, BrokerOrder, BrokerOrderRequest
+from trading.model import AccountSnapshot, BrokerOrder, BrokerOrderRequest, Fill
 
 if TYPE_CHECKING:
     from trading.journal import IntegrityResult, JournalEvent, JournalRecord
@@ -23,6 +23,8 @@ class ExecutionBroker(Protocol):
 
     def cancel_order(self, broker_order_id: str) -> BrokerOrder: ...
 
+    def fills_for_order(self, broker_order_id: str) -> tuple[Fill, ...]: ...
+
 
 class ExecutionJournal(Protocol):
     """Append-only persistence required before a future order submission."""
@@ -30,5 +32,7 @@ class ExecutionJournal(Protocol):
     def append(self, event: "JournalEvent") -> "JournalRecord": ...
 
     def has_intent(self, intent_id: str) -> bool: ...
+
+    def has_fill(self, fill_id: str) -> bool: ...
 
     def verify(self) -> "IntegrityResult": ...

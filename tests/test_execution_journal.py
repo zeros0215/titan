@@ -74,6 +74,22 @@ class ExecutionJournalTest(unittest.TestCase):
 
             self.assertEqual(1, journal.verify().event_count)
 
+    def test_has_fill_supports_idempotent_callbacks(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            journal = SQLiteExecutionJournal(
+                Path(directory) / "fills.sqlite",
+                mode=TradingMode.PAPER,
+                account_ref="acct_demo",
+            )
+            journal.append(event(
+                "fill-event", EventType.FILL_RECORDED,
+                intent_id="intent-1",
+                payload={"fill_id": "fill-1", "quantity": 1},
+            ))
+
+            self.assertTrue(journal.has_fill("fill-1"))
+            self.assertFalse(journal.has_fill("fill-2"))
+
     def test_database_rejects_update_and_delete(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "paper.sqlite"

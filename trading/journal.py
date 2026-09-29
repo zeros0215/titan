@@ -169,6 +169,19 @@ class SQLiteExecutionJournal:
             ).fetchone()
         return row is not None
 
+    def has_fill(self, fill_id: str) -> bool:
+        """Return whether a fill callback was already durably recorded."""
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT payload_json FROM journal_events "
+                "WHERE event_type=?",
+                (EventType.FILL_RECORDED.value,),
+            ).fetchall()
+        return any(
+            str(json.loads(row[0]).get("fill_id") or "") == fill_id
+            for row in rows
+        )
+
     def records(self) -> tuple[JournalRecord, ...]:
         with self._connection() as connection:
             rows = connection.execute(
