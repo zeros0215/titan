@@ -37,7 +37,7 @@ include = [
   "operation*", "pilot*", "pipeline*", "prediction*", "ranking*",
   "release*", "report*", "repository*", "research*", "runner*", "scanner*",
   "scoring*", "strategy_gate*", "tools*", "universe_history*", "validation*",
-  "walkforward*"
+  "walkforward*", "trading*"
 ]
 exclude = ["tests*", "legacy*", "output*", "venv*"]
 namespaces = true

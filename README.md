@@ -105,6 +105,7 @@ KIS 자격 증명이나 네트워크가 필요한 실제 연동 점검은 일반
 - [V1 백테스트 릴리스](docs/v1_backtest_release.md)
 - [과거 시점별 유니버스 적재](docs/point_in_time_universe_ingestion.md)
 - [정식 승격 준비 상태](docs/release_readiness.md)
+- [실매매 준비 아키텍처](docs/live_trading_architecture.md)
 - [233740 고정 전략 모의 관찰](docs/paper_reversal_operation.md)
 
 ## 정식 전략 승격 전 필수 조건
