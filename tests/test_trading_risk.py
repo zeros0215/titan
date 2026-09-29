@@ -14,6 +14,7 @@ from trading.model import (
     TradingMode,
 )
 from trading.reconciliation import ReconciliationResult
+from trading.market_rules import MarketRulesSnapshot
 from trading.risk import (
     RiskContext,
     RiskLimits,
@@ -156,6 +157,28 @@ class TradingRiskTest(unittest.TestCase):
         )
 
         self.assertIn(RiskReason.INSUFFICIENT_BUYING_POWER, decision.reasons)
+
+    def test_required_market_rules_are_fail_closed(self) -> None:
+        manager = RiskManager(RiskLimits(
+            max_order_value=Decimal("1000000"),
+            max_position_value=Decimal("2000000"),
+            max_gross_exposure=Decimal("5000000"),
+            max_daily_loss=Decimal("100000"),
+            require_market_rules=True,
+        ))
+
+        missing = manager.evaluate(self.intent(), self.context())
+        closed_rules = MarketRulesSnapshot(
+            "005930", "KRX", NOW, False,
+            Decimal("70000"), Decimal("49000"), Decimal("91000"),
+            Decimal("100"),
+        )
+        closed = manager.evaluate(
+            self.intent(), self.context(market_rules=closed_rules)
+        )
+
+        self.assertIn(RiskReason.MARKET_RULES_MISSING, missing.reasons)
+        self.assertIn(RiskReason.SESSION_NOT_REGULAR, closed.reasons)
 
 
 if __name__ == "__main__":

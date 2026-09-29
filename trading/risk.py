@@ -18,6 +18,11 @@ from trading.model import (
     BrokerOrder,
 )
 from trading.reconciliation import ReconciliationResult
+from trading.market_rules import (
+    MarketRuleReason,
+    MarketRulesSnapshot,
+    validate_market_order,
+)
 
 
 class RiskReason(str, Enum):
@@ -37,6 +42,13 @@ class RiskReason(str, Enum):
     GROSS_EXPOSURE_LIMIT = "GROSS_EXPOSURE_LIMIT"
     INSUFFICIENT_BUYING_POWER = "INSUFFICIENT_BUYING_POWER"
     INSUFFICIENT_POSITION = "INSUFFICIENT_POSITION"
+    MARKET_RULES_MISSING = "MARKET_RULES_MISSING"
+    MARKET_RULES_STALE = "MARKET_RULES_STALE"
+    MARKET_RULE_SYMBOL_MISMATCH = "MARKET_RULE_SYMBOL_MISMATCH"
+    VENUE_NOT_KRX = "VENUE_NOT_KRX"
+    SESSION_NOT_REGULAR = "SESSION_NOT_REGULAR"
+    LIMIT_PRICE_OFF_TICK = "LIMIT_PRICE_OFF_TICK"
+    LIMIT_PRICE_OUTSIDE_DAILY_RANGE = "LIMIT_PRICE_OUTSIDE_DAILY_RANGE"
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +62,8 @@ class RiskLimits:
     max_account_age: timedelta = timedelta(seconds=30)
     max_intent_age: timedelta = timedelta(seconds=30)
     allowed_symbols: frozenset[str] = field(default_factory=frozenset)
+    require_market_rules: bool = False
+    max_market_rules_age: timedelta = timedelta(seconds=5)
 
     def __post_init__(self) -> None:
         money = (
@@ -68,6 +82,8 @@ class RiskLimits:
             raise ValueError("max_account_age must be positive")
         if self.max_intent_age <= timedelta(0):
             raise ValueError("max_intent_age must be positive")
+        if self.max_market_rules_age <= timedelta(0):
+            raise ValueError("max_market_rules_age must be positive")
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,6 +99,7 @@ class RiskContext:
     reserved_buying_power: Decimal = Decimal("0")
     kill_switch_active: bool = False
     live_orders_enabled: bool = False
+    market_rules: MarketRulesSnapshot | None = None
 
     def __post_init__(self) -> None:
         if self.now.tzinfo is None or self.now.utcoffset() is None:
@@ -128,6 +145,23 @@ class RiskManager:
             reasons.append(RiskReason.QUOTE_MISSING_OR_STALE)
         if intent.intent_id in context.seen_intent_ids:
             reasons.append(RiskReason.DUPLICATE_INTENT)
+        if self.limits.require_market_rules:
+            if context.market_rules is None:
+                reasons.append(RiskReason.MARKET_RULES_MISSING)
+            else:
+                market_decision = validate_market_order(
+                    intent,
+                    context.market_rules,
+                    now=context.now,
+                    maximum_age_seconds=int(
+                        self.limits.max_market_rules_age.total_seconds()
+                    ),
+                )
+                reasons.extend(
+                    RiskReason(reason.value)
+                    for reason in market_decision.reasons
+                    if reason is not MarketRuleReason.APPROVED
+                )
         if (
             self.limits.allowed_symbols
             and intent.symbol not in self.limits.allowed_symbols
