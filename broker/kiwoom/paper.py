@@ -140,6 +140,10 @@ class KiwoomPaperClient:
         if self._owns_client:
             self._client.close()
 
+    def access_token(self) -> str:
+        """Return an in-memory mock token for another mock-only adapter."""
+        return self._access_token()
+
     def account_snapshot(self) -> KiwoomPaperAccountSnapshot:
         deposit = self._read_all("kt00001", {"qry_tp": "3"})
         balance = self._read_all(

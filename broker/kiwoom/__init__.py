@@ -7,6 +7,13 @@ from broker.kiwoom.paper import (
     KiwoomPaperError,
     KiwoomPaperOrderObservation,
 )
+from broker.kiwoom.paper_order import (
+    KiwoomPaperOrderDisabled,
+    KiwoomPaperOrderGateway,
+    KiwoomPaperSubmissionUncertain,
+    PaperOrderAuthorization,
+    authorize_paper_order,
+)
 
 __all__ = [
     "KiwoomPaperAccountSnapshot",
@@ -14,4 +21,9 @@ __all__ = [
     "KiwoomPaperCredentials",
     "KiwoomPaperError",
     "KiwoomPaperOrderObservation",
+    "KiwoomPaperOrderDisabled",
+    "KiwoomPaperOrderGateway",
+    "KiwoomPaperSubmissionUncertain",
+    "PaperOrderAuthorization",
+    "authorize_paper_order",
 ]
