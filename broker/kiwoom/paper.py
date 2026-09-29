@@ -9,14 +9,18 @@ from decimal import Decimal, InvalidOperation
 from threading import Lock
 from time import monotonic, sleep
 from typing import Callable
+from zoneinfo import ZoneInfo
 
 import httpx
+
+from trading.model import OrderSide
 
 
 MOCK_BASE_URL = "https://mockapi.kiwoom.com"
 TOKEN_PATH = "/oauth2/token"
 ACCOUNT_PATH = "/api/dostk/acnt"
-READ_ONLY_API_IDS = frozenset({"kt00001", "kt00018"})
+READ_ONLY_API_IDS = frozenset({"kt00001", "kt00007", "kt00018"})
+SEOUL = ZoneInfo("Asia/Seoul")
 
 
 class KiwoomPaperError(RuntimeError):
@@ -70,6 +74,38 @@ class KiwoomPaperAccountSnapshot:
     synchronized_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class KiwoomPaperOrderObservation:
+    broker_order_id: str
+    symbol: str
+    side: OrderSide
+    requested_quantity: int
+    filled_quantity: int
+    remaining_quantity: int
+    order_price: Decimal
+    ordered_at: datetime
+    venue: str
+
+    def __post_init__(self) -> None:
+        if not self.broker_order_id:
+            raise ValueError("broker_order_id is required")
+        if len(self.symbol) != 6 or not self.symbol.isdigit():
+            raise ValueError("order symbol must be a six-digit KRX code")
+        if self.requested_quantity <= 0:
+            raise ValueError("requested_quantity must be positive")
+        quantities = (self.filled_quantity, self.remaining_quantity)
+        if any(value < 0 for value in quantities):
+            raise ValueError("order quantities must not be negative")
+        if self.filled_quantity + self.remaining_quantity > self.requested_quantity:
+            raise ValueError("broker order quantities are inconsistent")
+        if self.order_price < 0:
+            raise ValueError("order_price must not be negative")
+        if self.ordered_at.tzinfo is None or self.ordered_at.utcoffset() is None:
+            raise ValueError("ordered_at must be timezone-aware")
+        if self.venue != "KRX":
+            raise ValueError("paper order observation must use KRX")
+
+
 class KiwoomPaperClient:
     """Kiwoom client permanently restricted to mock authentication/account reads."""
 
@@ -121,6 +157,26 @@ class KiwoomPaperClient:
             unrealized_pnl=_signed_decimal(balance.get("tot_evlt_pl")),
             positions=positions,
             synchronized_at=self._clock(),
+        )
+
+    def order_fill_details(
+        self, *, order_date: datetime, symbol: str = ""
+    ) -> tuple[KiwoomPaperOrderObservation, ...]:
+        if symbol and (len(symbol) != 6 or not symbol.isdigit()):
+            raise ValueError("symbol must be a six-digit KRX code")
+        payload = self._read_all("kt00007", {
+            "qry_tp": "1",
+            "stk_bond_tp": "1",
+            "sell_tp": "0",
+            "dmst_stex_tp": "KRX",
+            "ord_dt": order_date.astimezone(SEOUL).strftime("%Y%m%d"),
+            "stk_cd": symbol,
+            "fr_ord_no": "",
+        })
+        return tuple(
+            _order_observation(row, order_date.astimezone(SEOUL))
+            for row in payload.get("acnt_ord_cntr_prps_dtl", [])
+            if isinstance(row, dict)
         )
 
     def _access_token(self) -> str:
@@ -286,4 +342,41 @@ def _position(row: dict) -> KiwoomPaperPosition:
         market_value=_decimal(row.get("evlt_amt")),
         unrealized_pnl=_signed_decimal(row.get("evltv_prft")),
         return_rate=_signed_decimal(row.get("prft_rt")) / Decimal("100"),
+    )
+
+
+def _order_observation(
+    row: dict, order_date: datetime
+) -> KiwoomPaperOrderObservation:
+    raw_code = str(row.get("stk_cd") or "").strip()
+    symbol = raw_code[1:] if raw_code.startswith("A") else raw_code
+    side_text = str(row.get("io_tp_nm") or "").strip()
+    side_code = str(row.get("trde_tp") or "").strip()
+    if "매수" in side_text or side_code == "2":
+        side = OrderSide.BUY
+    elif "매도" in side_text or side_code == "1":
+        side = OrderSide.SELL
+    else:
+        raise KiwoomPaperError(
+            "PAPER_UNKNOWN_ORDER_SIDE", "order history contains an unknown side"
+        )
+    time_text = str(row.get("ord_tm") or "").strip().zfill(6)[-6:]
+    try:
+        ordered_time = datetime.strptime(time_text, "%H%M%S").time()
+    except ValueError as error:
+        raise KiwoomPaperError(
+            "PAPER_INVALID_ORDER_TIME", "order history contains an invalid time"
+        ) from error
+    return KiwoomPaperOrderObservation(
+        broker_order_id=str(row.get("ord_no") or "").strip(),
+        symbol=symbol.zfill(6),
+        side=side,
+        requested_quantity=_integer(row.get("ord_qty")),
+        filled_quantity=_integer(row.get("cntr_qty")),
+        remaining_quantity=_integer(row.get("ord_remnq")),
+        order_price=_decimal(row.get("ord_uv")),
+        ordered_at=datetime.combine(
+            order_date.date(), ordered_time, tzinfo=SEOUL
+        ),
+        venue=str(row.get("dmst_stex_tp") or "KRX").strip(),
     )

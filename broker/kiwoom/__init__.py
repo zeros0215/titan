@@ -5,6 +5,7 @@ from broker.kiwoom.paper import (
     KiwoomPaperClient,
     KiwoomPaperCredentials,
     KiwoomPaperError,
+    KiwoomPaperOrderObservation,
 )
 
 __all__ = [
@@ -12,4 +13,5 @@ __all__ = [
     "KiwoomPaperClient",
     "KiwoomPaperCredentials",
     "KiwoomPaperError",
+    "KiwoomPaperOrderObservation",
 ]

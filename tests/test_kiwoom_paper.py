@@ -111,6 +111,56 @@ class KiwoomPaperClientTest(unittest.TestCase):
         self.assertNotIn("paper-secret", message)
         self.assertNotIn("private-token", message)
 
+    def test_reads_order_fill_details_with_krx_only_contract(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/oauth2/token":
+                return httpx.Response(200, json={
+                    "token": "private-token",
+                    "expires_dt": "20300102030405",
+                })
+            self.assertEqual(request.headers["api-id"], "kt00007")
+            self.assertEqual(request.url.path, "/api/dostk/acnt")
+            self.assertEqual(
+                request.read().decode(),
+                '{"qry_tp":"1","stk_bond_tp":"1","sell_tp":"0",'
+                '"dmst_stex_tp":"KRX","ord_dt":"20260929",'
+                '"stk_cd":"005930","fr_ord_no":""}',
+            )
+            return httpx.Response(200, json={
+                "return_code": 0,
+                "acnt_ord_cntr_prps_dtl": [{
+                    "ord_no": "0000024",
+                    "stk_cd": "A005930",
+                    "trde_tp": "2",
+                    "io_tp_nm": "+매수",
+                    "ord_qty": "1",
+                    "ord_uv": "70000",
+                    "cntr_qty": "1",
+                    "ord_remnq": "0",
+                    "ord_tm": "090015",
+                    "dmst_stex_tp": "KRX",
+                }],
+            })
+
+        client = KiwoomPaperClient(
+            KiwoomPaperCredentials("paper-key", "paper-secret"),
+            http_client=httpx.Client(
+                transport=httpx.MockTransport(handler),
+                base_url="https://mockapi.kiwoom.com",
+            ),
+            clock=lambda: datetime(2029, 1, 1, tzinfo=timezone.utc),
+            wait=lambda _: None,
+        )
+        orders = client.order_fill_details(
+            order_date=datetime(2026, 9, 29, tzinfo=timezone.utc),
+            symbol="005930",
+        )
+
+        self.assertEqual("0000024", orders[0].broker_order_id)
+        self.assertEqual("005930", orders[0].symbol)
+        self.assertEqual(1, orders[0].filled_quantity)
+        self.assertEqual("KRX", orders[0].venue)
+
 
 if __name__ == "__main__":
     unittest.main()
