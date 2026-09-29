@@ -1,105 +1,117 @@
-# TITAN V1.0
+# TITAN
 
-TITAN은 시장 상황(Context)과 종목 특성(Feature)을 함께 분석해 향후 상승 가능성이 높은 종목을 **선정하고 사후 검증**하는 플랫폼입니다.
+TITAN은 한국 주식 시장의 Context와 종목 Feature를 함께 분석해 후보를 선정하고,
+선정 당시의 근거를 보존한 뒤 시간순으로 성과를 검증하는 연구·운영 관찰 플랫폼이다.
 
-자동 주문, 포트폴리오 관리, 브로커 거래 기능은 V1 범위에 포함하지 않습니다.
+현재 범위는 **조회, 선정, 백테스트, 모니터링, 모의 관찰**까지다. KIS 연동은
+읽기 전용이며 실제 주문 API를 호출하지 않는다. 대시보드에서 사용하는
+`V1.3-S80-N7-TP5-SL10-CANDIDATE`도 승인된 실거래 전략이 아니라 관찰 중인 후보 전략이다.
 
-## V1 workflow
+## 구현 범위
 
 ```text
-Market Data → Analysis → Ranking → Selection → Backtest → Validation → Report
+시장/KIS 데이터
+  -> 데이터 품질 및 시점별 유니버스 검사
+  -> Context + Feature 분석과 종목 선정
+  -> 선정 스냅샷 및 관찰 코호트 저장
+  -> 5·10·20·40 거래일 검증
+  -> Walk-forward 및 전략 비교
+  -> KPI 모니터링과 변경 승인 게이트
+  -> 로컬 대시보드 및 주문 없는 모의 관찰
 ```
 
-1. `select`는 특정 시점까지의 가격 데이터만 사용해 후보를 분석·선정하고, 선정 근거와 당시 가격 데이터를 보관합니다.
-2. 시간이 지난 뒤 `validate`는 저장된 선정 결과와 이후 가격을 사용해 수익률을 재현하고 검증합니다.
-3. `report`는 저장된 모든 검증 결과를 누적 집계합니다.
+- MOCK, 과거 파일 및 KIS 읽기 전용 시장 데이터 공급자
+- 추세·모멘텀·거래량·가격 행동·위험·시장 Context 기반 점수화
+- 거래비용과 슬리피지를 반영한 검증 및 벤치마크 비교
+- 수정주가와 point-in-time 유니버스의 스테이징·검증·승격
+- 전략 설정 해시, Walk-forward 근거 및 사람 승인을 요구하는 변경 게이트
+- 일일 실행 중복 방지, 부분 실패 격리, KPI `NORMAL/WATCH/ALERT` 판정
+- S80 선정, 전략 연구 및 233740 모의 관찰을 제공하는 로컬 대시보드
 
-선정 시점 이후의 캔들은 분석에 사용하지 않습니다. 이를 통해 미래 데이터가 분석에 섞이는 것을 방지합니다.
+## 중요한 현재 상태
 
-## Setup
+- 실제 주문, 실계좌 포지션 및 자금 관리는 구현하지 않는다.
+- 현재 로컬 활성 유니버스 매니페스트는 대상 기간의 point-in-time 완전성을
+  선언하지만, 전체 활성 데이터는 `PROVISIONAL`이다. KRX 가격 원천에 공식
+  수정주가 필드가 없어 기업행위와 품질 격리 구간의 검토 전에는 정식 전략
+  승격이 차단된다.
+- 페이퍼 전략 결과는 연구 표본이며 수익을 보장하지 않는다.
+- 운영 설정과 비밀값은 `.env`에 두며 저장소에 커밋하지 않는다.
+
+## 설치
+
+Python 3.12를 기준으로 개발한다.
 
 ```powershell
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements-dev.txt
 ```
 
-기본값은 `MARKET_PROVIDER=MOCK`이며 기본 MOCK 시나리오는 강한 후보를 만들어 전체 흐름을 확인하기 위한 `BREAKOUT`입니다. MOCK은 같은 기준일·종목·시나리오에서 같은 OHLCV를 만들어 로컬 V1 흐름을 재현할 수 있습니다. 필요하면 `MOCK_SCENARIO=BULL`처럼 `bull`, `bear`, `sideways`, `breakout`, `crash` 중 하나를 설정할 수 있습니다. 실제 KIS 시세를 사용하려면 프로젝트 루트에 `.env` 파일을 만들고 다음 값을 설정합니다.
+기본 설정은 MOCK 데이터다. `.env.example`을 참고해 프로젝트 루트에 `.env`를
+만들 수 있다. KIS를 사용할 때만 읽기 전용 자격 증명을 설정한다.
 
 ```dotenv
 MARKET_PROVIDER=KIS
+KIS_MODE=VIRTUAL
 KIS_APP_KEY=your_app_key
 KIS_APP_SECRET=your_app_secret
 KIS_BASE_URL=your_kis_environment_base_url
+KIS_ACCOUNT=your_account
 ```
 
-모의투자/실전투자 환경에 맞는 KIS 앱 키와 base URL을 사용해야 합니다. 비밀 값이 담긴 `.env`는 저장소에 포함하지 않습니다.
-
-## Commands
-
-선정 전에 설정과 종목 유니버스를 확인합니다. 이 명령은 네트워크 시세를 요청하지 않습니다.
+## 빠른 시작
 
 ```powershell
 python -m app.main check
-```
-
-선정일 기준 후보를 최대 5개 선정합니다.
-
-```powershell
-python -m app.main select --date 2026-07-27 --top-n 5
-```
-
-선정 보고서에는 순위, 점수, 예측·판단 등급, 활성 특성 및 시장 Context가 표시됩니다.
-
-평가일이 지난 선정 결과를 검증합니다. 아래 예시는 3% 이상 수익을 성공으로 정의합니다.
-
-```powershell
-python -m app.main validate `
-  --selection-date 2026-07-27 `
-  --evaluation-date 2026-08-17 `
-  --holding-days 20 `
-  --success-return 0.03
-```
-
-`evaluation-date`는 `selection-date`보다 뒤여야 하며, `holding-days`는 양수여야 합니다. 해당 선정일의 스냅샷이 없으면 검증은 실행되지 않습니다.
-
-모든 검증 이력의 누적 성과를 확인합니다.
-
-```powershell
+python -m app.main select --date 2026-09-29 --top-n 5
+python -m app.main daily --date 2026-09-29
 python -m app.main report
+python -m app.main monitor
+python -m app.main --help
 ```
 
-## Stored outputs
+## 테스트
 
-- `output/selections/`: 일자별 선정 스냅샷과 점수·특성·판단 근거
-- `output/market_data/`: 선정 당시의 캔들 데이터 캐시
-- `output/validations/`: 검증 결과와 누적 보고용 이력
-- `output/reports/`: 선정·개별 검증·누적 검증 Markdown 보고서
+```powershell
+python -m pytest
+```
 
-동일한 선정일·평가일로 다시 검증하면 해당 검증 파일은 최신 결과로 갱신됩니다.
+테스트 설정은 저장소 루트를 import 경로에 포함하고 `tests/`만 수집한다.
+KIS 자격 증명이나 네트워크가 필요한 실제 연동 점검은 일반 테스트와 분리한다.
 
-## Selection criteria
+## 데이터와 산출물
 
-V1 점수 예산은 총 100점입니다. 활성화된 Feature는 해당 조건의 배점을 받고, Feature 강도와 원본 지표 값은 과열 필터 및 선정 근거로 별도 보존합니다.
+- `resources/`: 기본 종목군과 입력 템플릿
+- `output/selections/`: 날짜별 선정과 판단 근거
+- `output/validations/`: 보유기간별 검증 결과
+- `output/walk_forward/`: 시간순 백테스트와 아티팩트
+- `output/monitoring/`: KPI 상태 스냅샷
+- `output/reports/`: 사람이 읽는 운영·검증 보고서
+- `output/kis_pilot/`: 실행별로 격리된 KIS 읽기 전용 파일럿
+- `output/paper_grid/`, `output/paper_reversal_live/`: 실제 주문 없는 모의 상태
 
-| Category | Maximum score |
-|---|---:|
-| Trend | 30 |
-| Momentum | 15 |
-| Volume | 15 |
-| Price action | 15 |
-| Risk | 15 |
-| Market context | 10 |
+`output/`, `logs/`, 로컬 캐시와 비밀값은 버전 관리 대상이 아니다. 장기 운영
+환경에서는 원시 데이터와 감사 근거를 별도 보관 정책에 따라 백업해야 한다.
 
-후보는 기본적으로 총점 80점 이상이며, 추세·위험·시장 강도·과열 모멘텀 조건을 모두 통과해야 합니다. 기준값은 `config/selection_criteria.py`에 모여 있으므로 전략 조정 시 엔진 코드의 수정 범위를 최소화할 수 있습니다.
+## 운영 및 연구 문서
 
-70% 승률은 검증을 통해 추적할 목표이지, 점수 기준만으로 보장되는 값은 아닙니다. 누적 `report`의 표본 수, 승률, 평균 수익률을 함께 확인해 기준을 조정합니다.
+- [일일 운영](docs/daily_operation.md)
+- [KPI 모니터링](docs/kpi_monitoring.md)
+- [KIS 읽기 전용 파일럿](docs/kis_pilot.md)
+- [전략 연구](docs/strategy_research.md)
+- [전략 변경 게이트](docs/strategy_change_gate.md)
+- [V1 백테스트 릴리스](docs/v1_backtest_release.md)
+- [과거 시점별 유니버스 적재](docs/point_in_time_universe_ingestion.md)
+- [정식 승격 준비 상태](docs/release_readiness.md)
+- [233740 고정 전략 모의 관찰](docs/paper_reversal_operation.md)
 
-## V1 boundaries
+## 정식 전략 승격 전 필수 조건
 
-V1은 종목 선정 품질을 검증하는 데 집중합니다. 아래 항목은 이후 버전 범위입니다.
-
-- Portfolio, Position, Trade, Order, Broker execution
-- Paper/Live trading
-- Risk/Money management
-- Feature auto-learning, model retraining, hyperparameter search
+1. 공식 원천으로 과거 신규상장·상장폐지·시장 이전을 포함한 유니버스의
+   `COMPLETE` 판정을 재검토하고 원본 해시를 보존한다.
+2. 수정주가, 거래비용 및 슬리피지 근거를 고정한다.
+3. 동일 조건의 기준/후보 Walk-forward와 재현성 검사를 통과한다.
+4. 충분한 KIS 파일럿 및 forward-paper 표본을 검토한다.
+5. 전략 변경 게이트를 통과한 후보를 사람이 명시적으로 승인한다.

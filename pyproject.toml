@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "titan-selection-platform"
+version = "1.0.0"
+description = "Point-in-time stock selection, validation, and paper-observation platform"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "httpx>=0.28.0",
+  "matplotlib",
+  "numpy",
+  "pandas",
+  "plotly",
+  "python-dotenv>=1.1.0",
+  "sqlalchemy",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10"]
+notebook = ["jupyter"]
+
+[project.scripts]
+titan = "app.main:main"
+
+[tool.setuptools]
+py-modules = ["stock_list", "stock_loader", "run_pipeline"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+  "analysis*", "app*", "backtest*", "benchmark*", "broker*", "config*",
+  "core*", "data*", "decision*", "domain*", "engine*", "feature*",
+  "filter*", "indicators*", "interface*", "market*", "monitoring*",
+  "operation*", "pilot*", "pipeline*", "prediction*", "ranking*",
+  "release*", "report*", "repository*", "research*", "runner*", "scanner*",
+  "scoring*", "strategy_gate*", "tools*", "universe_history*", "validation*",
+  "walkforward*"
+]
+exclude = ["tests*", "legacy*", "output*", "venv*"]
+namespaces = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "--strict-config --strict-markers"
+
