@@ -29,7 +29,7 @@
 </head>
 <body><main>
   <div class="top"><div><div class="eyebrow">TITAN · KIS READ-ONLY</div><h1>S80 Operations Console</h1><div class="sub">전날 S80 종목 선정, 다음 거래일 시가 갭 확인, 보유 종목의 익절·손절 상태를 확인합니다. 실제 주문 요청은 코드 수준에서 차단됩니다.</div></div><div class="stamp">마지막 생성<br><strong id="generated"></strong></div></div>
-  <nav class="tabs"><button class="tab-button active" data-tab="current-panel">현재 운영</button><button class="tab-button" data-tab="history-panel">운영 전략 과거 성과</button></nav>
+  <nav class="tabs"><button class="tab-button active" data-tab="current-panel">현재 운영</button><button class="tab-button" data-tab="history-panel">운영 전략 과거 성과</button><button class="tab-button" data-tab="strategy-lab-panel">전략 비교 연구</button><button class="tab-button" data-tab="paper-grid-panel">ETF 그리드 모의투자</button></nav>
   <section class="grid tab-panel active" id="current-panel">
     <article class="card full"><h2>현재 운영 전략</h2><div class="metrics"><div class="tile"><div class="label">운영 상태</div><div class="value" id="operational-label">—</div></div><div class="tile"><div class="label">전략 버전</div><div class="value" id="operational-version" style="font-size:16px">—</div></div></div><div class="sub" id="operational-summary"></div></article>
     <article class="card full"><h2>오늘 해야 할 행동</h2><div class="big" id="today-action">확인 중</div><div class="sub" id="today-action-detail"></div><div class="sub" id="server-task-status">실행 작업 확인 중</div><div class="sub" id="live-price-status">KIS 현재가 확인 전</div><div class="runner"><label>선정 기준일<input id="operational-selection-date" type="date"></label><button id="operational-selection-run" type="button">S80 종목 선정 실행</button><div class="run-message" id="operational-selection-message"></div></div></article>
@@ -51,6 +51,26 @@
     <article class="card full" data-archived-feature="event-performance" style="display:none"><h2>이벤트 후보 모의 성과</h2><div class="sub">익절 +5% · 손절 -10% · 최대 20거래일. 일봉으로 전후를 구분할 수 없는 진입 당일은 매도 판정에서 제외합니다.</div><div class="metrics"><div class="tile"><div class="label">10시 진입 표본</div><div class="value" id="event-entry-total">0</div></div><div class="tile"><div class="label">완료 거래</div><div class="value" id="event-completed">0</div></div><div class="tile"><div class="label">승률</div><div class="value" id="event-win-rate">—</div></div><div class="tile"><div class="label">평균 수익률</div><div class="value" id="event-average">—</div></div></div><div class="scroll" id="event-shadow-trades"></div></article>
     <article class="card full"><h2>보유 종목 관리</h2><div class="sub">실제 주문은 실행하지 않습니다. 수동 체결 내역을 입력하면 최신 종가 기준 익절·손절 상태를 표시합니다.</div><div class="runner"><label>종목코드<input id="position-code" maxlength="6" placeholder="005930"></label><label>종목명<input id="position-name" placeholder="삼성전자"></label><label>매수일<input id="position-date" type="date"></label><label>매수가<input id="position-price" type="number" min="1" step="1"></label><label>수량<input id="position-quantity" type="number" min="1" step="1"></label><button id="position-add" type="button">보유 종목 추가</button><div class="run-message" id="position-message"></div></div><div class="scroll" id="positions"></div></article>
     <article class="card full" style="display:none"><h2>거래일별 실행 이력</h2><div class="scroll" id="history"></div><div class="legend"><span>통과 기준: API ≥98%</span><span>재시도 ≤20%</span><span>품질 제외 ≤5%</span><span>조회 실패 0</span><span>주문 요청 0</span></div></article>
+  </section>
+  <section class="grid tab-panel" id="paper-grid-panel">
+    <article class="card full"><h2>시작 시 현재가로 100주 즉시 가상 매수</h2><div class="sub">보유가 없을 때 시작하면 조회한 현재가로 100주를 즉시 가상 체결합니다. 이후 아래의 간격으로 추가 매수하며, 최초 매수를 포함해 최대 5회·500주입니다. 보유 중 재시작은 기존 보유만 이어갑니다. 실제 시장가 주문의 호가·슬리피지는 재현하지 않습니다.</div></article>
+    <article class="card full"><h2>KODEX 코스닥150레버리지 그리드</h2><div class="sub">233740 · 최초 매수 후 한 간격씩 하락할 때마다 100주를 추가 가상 매수하고, 각 매수분을 해당 매수가보다 한 간격 위에서 개별 가상 매도합니다. 기준가 4,000~6,000원은 100원 간격, 그 밖은 약 2% 간격입니다. 급락·갭 하락 시 추가 매수를 중단합니다. 실제 주문 API는 호출하지 않습니다.</div><div class="legend"><span>모의투자 전용</span><span>최대 보유 500주</span><span>100주 × 최대 5단계</span><span>개별 목표가 매도</span><span>미청산 한도 이월</span><span>급락 시 매수 중단</span><span>세전 손익</span></div></article>
+    <article class="card full"><div class="metrics"><div class="tile"><div class="label">상태</div><div class="value" id="paper-grid-status">—</div></div><div class="tile"><div class="label">현재가</div><div class="value" id="paper-grid-current">—</div></div><div class="tile"><div class="label">대기 주문</div><div class="value" id="paper-grid-order">—</div></div><div class="tile"><div class="label">완료 순환</div><div class="value" id="paper-grid-cycles">0</div></div><div class="tile"><div class="label">누적 총차익</div><div class="value" id="paper-grid-gross">0원</div></div><div class="tile"><div class="label">비용 후 세전손익</div><div class="value" id="paper-grid-net">0원</div></div></div></article>
+    <article class="card full"><h2>모의투자 제어</h2><div class="sub" id="paper-grid-detail">상태를 확인 중입니다.</div><div class="runner"><button id="paper-grid-start" type="button">모의투자 시작</button><button id="paper-grid-refresh" type="button">현재가 확인</button><button id="paper-grid-stop" type="button">중지</button><button id="paper-grid-reset" type="button">기록 초기화</button><div class="run-message" id="paper-grid-message" aria-live="polite"></div></div></article>
+    <article class="card full"><h2>가상 체결 기록</h2><div class="sub">매수·매도 수수료는 각각 0.015%로 가정합니다. 파생형 ETF의 과표기준가 관련 세금은 실시간 계산에서 제외됩니다.</div><div class="scroll" id="paper-grid-events"></div></article>
+    <article class="card full"><h2>판정 한계</h2><div class="sub">현재가 조회 시점 사이의 실제 호가 순서는 알 수 없습니다. 따라서 한 번의 조회에서는 매수 또는 매도 중 하나만 체결하며, 표시 결과는 실제 체결 가능성을 보장하지 않습니다.</div></article>
+  </section>
+  <section class="grid tab-panel" id="strategy-lab-panel">
+    <article class="card full"><h2>선택 알고리즘 비교 연구</h2><div class="sub">현재 S80 운영 규칙은 변경하지 않습니다. 서로 다른 종목 선택 알고리즘을 동일한 데이터·진입·청산 조건으로 비교하는 독립 연구 영역입니다.</div><div class="legend"><span>운영 반영 없음</span><span>다음 거래일 시가 진입</span><span>시가 갭 ±3%</span><span>익절 +5%</span><span>손절 -10%</span><span>최대 20거래일</span></div></article>
+    <article class="card full"><div class="metrics"><div class="tile"><div class="label">현재 단계</div><div class="value" style="font-size:18px">비교 설계 고정</div></div><div class="tile"><div class="label">비교 전략</div><div class="value">4</div></div><div class="tile"><div class="label">운영 전략 변경</div><div class="value good">없음</div></div></div></article>
+    <article class="card half"><h2>현재 S80</h2><div class="sub">현재 운영 중인 점수 기반 선택 알고리즘입니다. 신규 전략의 성과를 판단하는 기준선으로만 사용합니다.</div><div class="legend"><span class="status ready">기준선</span></div></article>
+    <article class="card half"><h2>상대강도 + 단기 눌림목</h2><div class="sub">시장·업종 대비 강한 중기 추세를 유지하면서 최근 1~3거래일 정상 조정과 거래량 감소가 나타난 종목을 선별합니다.</div><div class="legend"><span class="status">1순위 연구</span></div></article>
+    <article class="card half"><h2>거래량 + 가격 돌파</h2><div class="sub">20·60일 고점 근접 또는 돌파, 거래량·거래대금 증가, 고가 부근 종가와 제한된 윗꼬리를 함께 평가합니다.</div><div class="legend"><span class="status">2순위 연구</span></div></article>
+    <article class="card half"><h2>추세 필터 + 평균회귀</h2><div class="sub">중기 상승추세가 유지된 종목 중 최근 1~3거래일 하락이 ATR·RSI 기준으로 과도한 종목의 단기 반등을 평가합니다.</div><div class="legend"><span class="status">3순위 연구</span></div></article>
+    <article class="card full"><h2>공통 비교 실행</h2><div class="sub" id="strategy-lab-summary">비교 결과를 확인 중입니다.</div><div class="runner"><label>대상 연도<input id="strategy-lab-year" type="number" min="2020" max="2026" step="1" value="2026"></label><button id="strategy-lab-run" type="button">전략 비교 실행</button><div class="run-message" id="strategy-lab-message"></div></div></article>
+    <article class="card full"><h2>공통 비교 결과</h2><div class="sub">거래 수, 비용 반영 평균수익률, Profit Factor, 손익비, MDD를 같은 조건으로 비교합니다.</div><div class="scroll" id="strategy-lab-results"></div></article>
+    <article class="card full"><h2>순위 구간별 선별력</h2><div class="sub">Top5만 보지 않고 점수가 높을수록 미래수익률도 높아지는지 Rank 1~5, 6~10, 11~20, 21~50 구간으로 검증합니다.</div><div class="scroll" id="strategy-lab-ranks"></div></article>
+    <article class="card full"><h2>연구 원칙</h2><div class="legend"><span>동일 모집단·기간</span><span>미래정보 차단</span><span>비용·슬리피지 반영</span><span>연도별 검증</span><span>시장 국면별 검증</span><span>Feature는 한 번에 하나씩 추가</span><span>검증 전 운영 승격 금지</span></div></article>
   </section>
   <section class="grid tab-panel" id="history-panel">
     <article class="card full"><h2>과거 월간·연간 테스트</h2><div class="sub">모든 결과는 다음 거래일 시가 진입 기준입니다. 종목 선정 알고리즘과 청산 조건을 비교하는 데 필요한 항목만 제공합니다.</div><div class="runner"><label>전략 버전<select id="history-strategy"><option value="V1.3-S80-N7-TP5-SL10-CANDIDATE">S80 운영 연구</option><option value="V1.3-RISK-5D-CANDIDATE">V1.3 위험필터 5거래일 비교군</option><option value="V1.1">V1.1 기준선</option></select></label><label>비교 그룹<select id="history-cohort"><option value="SELECTED">정식 선정군</option><option value="COMPARE">선정군·후보군 비교</option><option value="OBSERVATION">관찰 후보군</option></select></label><label>매도 기간<select id="history-holding"><option value="1">1거래일</option><option value="5">5거래일</option><option value="10">10거래일</option><option value="20">20거래일</option></select></label><label>익절률 (%)<input id="history-profit-target" type="number" min="0.1" max="100" step="0.1" placeholder="전략 기본값"></label><label>손절률 (%)<input id="history-stop-loss" type="number" min="0.1" max="100" step="0.1" placeholder="전략 기본값"></label><span class="runner-break" aria-hidden="true"></span><label>대상 월<input id="history-month" type="month"></label><button id="history-month-run" type="button">월간 테스트 실행</button><label>대상 연도<input id="history-year" type="number" min="2022" max="2026" step="1"></label><button id="history-run" type="button">연간 테스트 실행</button><div class="run-message" id="history-message"></div></div></article>
@@ -275,6 +295,92 @@ function reloadPreservingView(){
 const savedScrollY=Number(sessionStorage.getItem('titan-scroll-y')||0);
 sessionStorage.removeItem('titan-scroll-y');
 requestAnimationFrame(()=>window.scrollTo(0,savedScrollY));
+const strategyLabYear=document.querySelector('#strategy-lab-year');
+const strategyLabButton=document.querySelector('#strategy-lab-run');
+const strategyLabMessage=document.querySelector('#strategy-lab-message');
+function renderStrategyLab(){
+  const lab=D.strategy_comparison||{};
+  const rows=lab.strategies||[];
+  strategyLabYear.value=sessionStorage.getItem('titan-strategy-lab-year')||lab.year||'2026';
+  document.querySelector('#strategy-lab-summary').textContent=rows.length
+    ?`${lab.year}년 V1-RESEARCH · 데이터 ${lab.coverage_end||'—'}까지 · 운영 S80 변경 없음`
+    :'아직 전략 비교 결과가 없습니다.';
+  document.querySelector('#strategy-lab-results').innerHTML=rows.length?'<table><thead><tr><th>전략</th><th>후보 발생일</th><th>거래 수</th><th>평균 순수익</th><th>Profit Factor</th><th>승률</th><th>손익비</th><th>MDD</th><th>상태</th></tr></thead><tbody>'+rows.map(x=>`<tr><td>${x.label}</td><td>${x.candidate_days||0}</td><td>${x.trades||0}</td><td class="${Number(x.average_net_return)>=0?'good':'bad'}">${pct(x.average_net_return)}</td><td>${x.profit_factor==null?'—':Number(x.profit_factor).toFixed(2)}</td><td>${pct(x.win_rate)}</td><td>${x.payoff_ratio==null?'—':Number(x.payoff_ratio).toFixed(2)}</td><td class="bad">${pct(x.maximum_drawdown)}</td><td class="${x.trades?'good':'watch'}">${x.trades?'비교 가능':'검증 전'}</td></tr>`).join('')+'</tbody></table>':'<div class="empty">전략 비교 실행 전입니다.</div>';
+  document.querySelector('#strategy-lab-ranks').innerHTML=rows.length?rows.map(strategy=>'<h2>'+strategy.label+'</h2><table><thead><tr><th>순위 구간</th><th>다음 날</th><th>5거래일</th><th>10거래일</th><th>20거래일</th><th>표본 수</th></tr></thead><tbody>'+(strategy.rank_buckets||[]).map(x=>`<tr><td>${x.bucket}</td><td>${pct(x.return_1d)}</td><td>${pct(x.return_5d)}</td><td>${pct(x.return_10d)}</td><td>${pct(x.return_20d)}</td><td>${x.samples||0}</td></tr>`).join('')+'</tbody></table>').join(''):'<div class="empty">순위 구간 결과가 없습니다.</div>';
+}
+strategyLabButton.addEventListener('click',async()=>{
+  strategyLabButton.disabled=true;
+  strategyLabMessage.className='run-message';
+  strategyLabMessage.textContent='전략 비교 백테스트를 실행 중입니다.';
+  sessionStorage.setItem('titan-strategy-lab-year',strategyLabYear.value);
+  sessionStorage.setItem('titan-active-tab','strategy-lab-panel');
+  try{
+    const response=await fetch('/api/run-strategy-comparison',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({year:Number(strategyLabYear.value)})});
+    const result=await jsonResponse(response);
+    if(!response.ok)throw new Error(result.message||'전략 비교에 실패했습니다.');
+    strategyLabMessage.className='run-message good';
+    strategyLabMessage.textContent=`${result.year}년 전략 비교가 완료됐습니다.`;
+    setTimeout(reloadPreservingView,700);
+  }catch(error){
+    strategyLabMessage.className='run-message error';
+    strategyLabMessage.textContent=error.message;
+    strategyLabButton.disabled=false;
+  }
+});
+renderStrategyLab();
+const paperGridStatus=document.querySelector('#paper-grid-status');
+const paperGridMessage=document.querySelector('#paper-grid-message');
+let paperGridState=null;
+let paperGridBusy=false;
+const paperGridStatusNames={STOPPED:'중지',RUNNING:'운영 중',BUY_HALTED:'신규 매수 중단'};
+const paperGridEventNames={START:'시작',BUY_FILLED:'가상 매수 체결',SELL_FILLED:'가상 매도 체결',BUY_HALTED:'급락 매수 중단',BUY_RESUMED:'다음 거래일 매수 재개',RISK_REVIEW:'손실 검토 필요',STOP:'중지'};
+function paperGridWon(value){return `${Math.round(Number(value)||0).toLocaleString()}원`}
+function paperGridUpdateMessage(state){
+  if(state.quote_warning){
+    paperGridMessage.className='run-message error';
+    paperGridMessage.textContent=`${state.quote_warning} 수신 현재가: ${state.raw_quote?.close??'없음'}원 · 화면 현재가는 마지막 정상 시세입니다.`;
+    return;
+  }
+  if(state.current_price==null)return;
+  const updated=state.updated_at?new Date(state.updated_at).toLocaleTimeString('ko-KR'):'방금';
+  paperGridMessage.className='run-message good';
+  paperGridMessage.textContent=`현재가 ${Number(state.current_price).toLocaleString()}원 · ${updated} 갱신`;
+}
+function renderPaperGrid(state){
+  paperGridState=state;
+  if(state.quote_warning)paperGridUpdateMessage(state);
+  paperGridStatus.textContent=paperGridStatusNames[state.status]||state.status;
+  paperGridStatus.className=`value ${state.status==='BUY_HALTED'?'bad':state.status==='RUNNING'?'good':''}`;
+  document.querySelector('#paper-grid-current').textContent=state.current_price==null?'—':`${Number(state.current_price).toLocaleString()}원`;
+  document.querySelector('#paper-grid-order').textContent=state.order_price==null?'없음':`${state.order_side==='BUY'?'매수':'매도'} ${Number(state.order_price).toLocaleString()}원 × ${state.quantity}주`;
+  document.querySelector('#paper-grid-cycles').textContent=Number(state.cycles||0).toLocaleString();
+  document.querySelector('#paper-grid-gross').textContent=paperGridWon(state.gross_profit);
+  const net=document.querySelector('#paper-grid-net');
+  net.textContent=paperGridWon(state.net_profit_before_tax);net.className=`value ${Number(state.net_profit_before_tax)>=0?'good':'bad'}`;
+  const lots=state.lots||[];const holding=lots.reduce((sum,x)=>sum+Number(x.quantity||0),0);const mode=state.spacing_mode==='ADAPTIVE_2_PERCENT'?'2% 조정':'100원 고정';
+  document.querySelector('#paper-grid-detail').textContent=`가상 보유 ${holding}/500주 · 간격 ${paperGridWon(state.spacing)} (${mode}) · ${state.halt_reason||'신규 매수 가능'} · 누적 수수료 ${paperGridWon(state.fees)}`;
+  const events=state.events||[];
+  document.querySelector('#paper-grid-events').innerHTML=events.length?'<table><thead><tr><th>시각</th><th>이벤트</th><th>매수가</th><th>매도가</th><th>총수익률</th><th>비용 후 세전 수익률</th><th>다음 주문가</th></tr></thead><tbody>'+events.map(x=>`<tr><td>${safe(x.time)}</td><td>${paperGridEventNames[x.type]||safe(x.type)}</td><td>${x.buy_price==null?'—':paperGridWon(x.buy_price)}</td><td>${x.sell_price==null?'—':paperGridWon(x.sell_price)}</td><td class="${x.gross_return==null?'':Number(x.gross_return)>=0?'good':'bad'}">${pct(x.gross_return)}</td><td class="${x.net_return_before_tax==null?'':Number(x.net_return_before_tax)>=0?'good':'bad'}">${pct(x.net_return_before_tax)}</td><td>${x.next_order_price==null?'—':paperGridWon(x.next_order_price)}</td></tr>`).join('')+'</tbody></table>':'<div class="empty">아직 모의 체결 기록이 없습니다.</div>';
+}
+async function paperGridAction(action,quiet=false){
+  if(paperGridBusy)return;
+  paperGridBusy=true;
+  const buttons=['start','refresh','stop','reset'].map(id=>document.querySelector(`#paper-grid-${id}`));buttons.forEach(x=>x.disabled=true);
+  if(!quiet){paperGridMessage.className='run-message';paperGridMessage.textContent=action==='refresh'?'KIS 현재가를 확인 중입니다.':'모의투자 상태를 변경 중입니다.'}
+  try{
+    const response=await fetch('/api/paper-grid',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
+    const result=await jsonResponse(response);if(!response.ok)throw new Error(result.message||'모의투자 갱신에 실패했습니다.');renderPaperGrid(result.state);
+    if(action==='refresh'||action==='start')paperGridUpdateMessage(result.state);
+    else if(!quiet){paperGridMessage.className='run-message good';paperGridMessage.textContent='모의투자 상태를 변경했습니다.'}
+  }catch(error){if(!quiet){paperGridMessage.className='run-message error';paperGridMessage.textContent=error.message}}
+  finally{paperGridBusy=false;buttons.forEach(x=>x.disabled=false);document.querySelector('#paper-grid-start').disabled=!paperGridState||paperGridState.status!=='STOPPED'}
+}
+document.querySelector('#paper-grid-start').addEventListener('click',()=>paperGridAction('start'));
+document.querySelector('#paper-grid-refresh').addEventListener('click',()=>paperGridAction('refresh'));
+document.querySelector('#paper-grid-stop').addEventListener('click',()=>paperGridAction('stop'));
+document.querySelector('#paper-grid-reset').addEventListener('click',()=>{if(confirm('모든 모의 체결 기록과 누적 손익을 초기화할까요?'))paperGridAction('reset')});
+paperGridAction('status',true);
+setInterval(()=>{if(document.querySelector('#paper-grid-panel').classList.contains('active')&&paperGridState&&paperGridState.status!=='STOPPED')paperGridAction('refresh',true)},10000);
 function activateTab(tabId){
   document.querySelectorAll('.tab-button').forEach(item=>item.classList.toggle('active',item.dataset.tab===tabId));
   document.querySelectorAll('.tab-panel').forEach(panel=>panel.classList.toggle('active',panel.id===tabId));

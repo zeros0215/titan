@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import socket
 import subprocess
 import sys
 import threading
@@ -26,6 +25,11 @@ from analysis.event_candidates import (
 )
 from broker.kis.current_price import KisCurrentPriceProvider
 from broker.kis.exception import KisApiException
+from broker.mock.generator import MockGenerator
+from broker.mock.scenario import MarketScenario
+from config.settings import settings
+from domain.enums import MarketType
+from domain.stock import Stock
 from price_history.krx import (
     KrxPriceClient,
     KrxPriceCollector,
@@ -52,28 +56,61 @@ from research.strategy_search import (
     render_ranking_markdown,
     save_candidate_grid,
 )
+from research.strategy_comparison import run_strategy_comparison
+from research.paper_grid import (
+    CODE as PAPER_GRID_CODE,
+    PaperGridRepository,
+    observe as observe_paper_grid,
+    start as start_paper_grid,
+    stop as stop_paper_grid,
+)
 
 
 HOST = "127.0.0.1"
 PORT = 8765
 RUN_LOCK = threading.Lock()
 PRICE_LOCK = threading.Lock()
+PAPER_GRID_LOCK = threading.Lock()
 OPERATIONAL_VERSION = "V1.3-S80-N7-TP5-SL10-CANDIDATE"
 ACTIVE_TASK: dict[str, str] = {}
+PAPER_GRID_STATE = ROOT / "output" / "paper_grid" / "kodex_233740.json"
+
+
+def _mock_current_price(code: str) -> dict[str, object]:
+    """Return a deterministic local quote when the application uses MOCK data."""
+    scenario = MarketScenario(settings.mock_scenario.lower())
+    series = MockGenerator.create(
+        Stock(code, "MOCK 종목", MarketType.ETF),
+        count=2,
+        reference_date=datetime.now(),
+        scenario=scenario,
+    )
+    previous, current = series.candles
+    previous_close = 5_000
+    close = int(round(previous_close * current.close / previous.close / 5) * 5)
+    return {
+        "close": close,
+        "change_rate": close / previous_close - 1,
+        "open": close,
+        "high": close,
+        "low": close,
+        "volume": current.volume,
+        "trading_value": close * current.volume,
+        "date": current.date.date().isoformat(),
+        "time": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "source": "MOCK",
+    }
+
+
+def _mock_paper_grid_quote() -> dict[str, object]:
+    return _mock_current_price(PAPER_GRID_CODE)
 
 
 class ExclusiveThreadingHTTPServer(ThreadingHTTPServer):
-    """Prevent multiple Windows dashboard processes from sharing one port."""
+    """Serve one local dashboard while allowing a prompt restart on Windows."""
 
-    allow_reuse_address = False
+    allow_reuse_address = True
     allow_reuse_port = False
-
-    def server_bind(self) -> None:
-        if os.name == "nt" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
-            self.socket.setsockopt(
-                socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1
-            )
-        super().server_bind()
 
 
 class DashboardHandler(BaseHTTPRequestHandler):
@@ -118,8 +155,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "/api/run-pre-breakout",
             "/api/run-pre-breakout-month",
             "/api/current-prices",
+            "/api/paper-grid",
             "/api/news-headlines",
             "/api/run-event-candidates",
+            "/api/run-strategy-comparison",
             "/api/research-generate",
             "/api/research-rank",
             "/api/research-run",
@@ -145,11 +184,17 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if path == "/api/current-prices":
             self._current_prices()
             return
+        if path == "/api/paper-grid":
+            self._paper_grid()
+            return
         if path == "/api/news-headlines":
             self._news_headlines()
             return
         if path == "/api/run-event-candidates":
             self._run_event_candidates()
+            return
+        if path == "/api/run-strategy-comparison":
+            self._run_strategy_comparison()
             return
         if path == "/api/research-generate":
             candidates = generate_bounded_candidates()
@@ -646,9 +691,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not PRICE_LOCK.acquire(blocking=False):
             self._json(409, {"message": "현재가를 이미 갱신 중입니다."})
             return
-        provider = KisCurrentPriceProvider()
+        provider = None
         try:
-            prices = provider.get_prices(codes)
+            if settings.market_provider.upper() == "MOCK":
+                prices = {code: _mock_current_price(code) for code in codes}
+            else:
+                provider = KisCurrentPriceProvider()
+                prices = provider.get_prices(codes)
             self._json(200, {
                 "prices": prices,
                 "entry_snapshot_saved": False,
@@ -656,10 +705,67 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except (
             OSError, TypeError, ValueError, KisApiException, httpx.HTTPError,
         ) as exc:
-            self._json(502, {"message": f"KIS 현재가 조회 실패: {exc}"})
+            self._json(502, {"message": f"현재가 조회 실패: {exc}"})
         finally:
-            provider.close()
+            if provider is not None:
+                provider.close()
             PRICE_LOCK.release()
+
+    def _paper_grid(self) -> None:
+        """Advance the KODEX grid with quotes only; never submit an order."""
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(length) or b"{}")
+            action = str(payload.get("action", "status")).lower()
+            target_spread = int(payload.get("target_spread", 100))
+            if action not in {"status", "start", "refresh", "stop", "reset"}:
+                raise ValueError("지원하지 않는 모의투자 동작입니다.")
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            self._json(400, {"message": str(exc)})
+            return
+        if not PAPER_GRID_LOCK.acquire(blocking=False):
+            self._json(409, {"message": "모의 그리드 상태를 갱신 중입니다."})
+            return
+        repository = PaperGridRepository(PAPER_GRID_STATE)
+        try:
+            state = repository.load()
+            if action == "start" and state["status"] != "STOPPED":
+                self._json(200, {"state": state, "operational_orders": 0})
+                return
+            if action == "reset":
+                state = repository.reset()
+            elif action == "stop":
+                state = stop_paper_grid(state)
+                repository.save(state)
+            elif action in {"start", "refresh"}:
+                if settings.market_provider.upper() == "MOCK":
+                    quote = _mock_paper_grid_quote()
+                else:
+                    if not PRICE_LOCK.acquire(blocking=False):
+                        self._json(409, {"message": "KIS 현재가를 이미 조회 중입니다."})
+                        return
+                    provider = None
+                    try:
+                        provider = KisCurrentPriceProvider()
+                        quote = provider.get_prices([PAPER_GRID_CODE])[PAPER_GRID_CODE]
+                    finally:
+                        if provider is not None:
+                            provider.close()
+                        PRICE_LOCK.release()
+                if action == "start":
+                    state = start_paper_grid(
+                        state,
+                        quote,
+                        target_spread=target_spread,
+                    )
+                else:
+                    state = observe_paper_grid(state, quote)
+                repository.save(state)
+            self._json(200, {"state": state, "operational_orders": 0})
+        except (OSError, TypeError, ValueError, KisApiException, httpx.HTTPError) as exc:
+            self._json(502, {"message": f"모의 그리드 갱신 실패: {exc}"})
+        finally:
+            PAPER_GRID_LOCK.release()
 
     def _news_headlines(self) -> None:
         try:
@@ -983,6 +1089,41 @@ class DashboardHandler(BaseHTTPRequestHandler):
             _clear_active_task()
             RUN_LOCK.release()
 
+    def _run_strategy_comparison(self) -> None:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(length) or b"{}")
+            year = int(payload.get("year", 2026))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            self._json(400, {"message": "year must be a number"})
+            return
+        if year < 2020 or year > datetime.now().year:
+            self._json(400, {"message": "year is outside the supported range"})
+            return
+        if not RUN_LOCK.acquire(blocking=False):
+            self._json(409, {"message": "another task is already running"})
+            return
+        _set_active_task("STRATEGY_COMPARISON")
+        try:
+            result = run_strategy_comparison(year)
+            build_dashboard()
+            self._json(
+                200,
+                {
+                    "message": "strategy comparison completed",
+                    "year": result["year"],
+                    "strategy_count": len(result["strategies"]),
+                    "operational_strategy_unchanged": True,
+                },
+            )
+        except ValueError as exc:
+            self._json(400, {"message": str(exc)})
+        except Exception as exc:
+            self._json(500, {"message": f"strategy comparison failed: {exc}"})
+        finally:
+            _clear_active_task()
+            RUN_LOCK.release()
+
     def _run_industry_rs(self) -> None:
         try:
             length = int(self.headers.get("Content-Length", "0"))
@@ -1023,6 +1164,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
             RUN_LOCK.release()
 
     def _run_data_update(self) -> None:
+        if settings.market_provider.upper() == "MOCK":
+            self._json(200, {
+                "message": "MOCK 모드에서는 내장 모의 데이터를 사용합니다.",
+                "updated_sessions": 0,
+            })
+            return
         if not RUN_LOCK.acquire(blocking=False):
             self._json(409, {"message": "다른 작업이 이미 실행 중입니다."})
             return

@@ -15,6 +15,7 @@ MANUAL_OUTPUT = ROOT / "output" / "kis_manual_tests"
 INDUSTRY_RS_OUTPUT = ROOT / "output" / "industry_rs"
 PRE_BREAKOUT_OUTPUT = ROOT / "output" / "pre_breakout"
 EVENT_OUTPUT = ROOT / "output" / "event_candidates" / "runs"
+STRATEGY_COMPARISON_OUTPUT = ROOT / "output" / "strategy_comparison"
 TEMPLATE = ROOT / "dashboard" / "index.template.html"
 SITE_INDEX = ROOT / "dashboard" / "index.html"
 LOCAL_INDEX = OUTPUT / "dashboard.html"
@@ -326,6 +327,11 @@ def main() -> None:
         research_ranking_path.read_text(encoding="utf-8")
         if research_ranking_path.exists() else ""
     )
+    strategy_comparison_path = STRATEGY_COMPARISON_OUTPUT / "2026.json"
+    strategy_comparison = (
+        json.loads(strategy_comparison_path.read_text(encoding="utf-8"))
+        if strategy_comparison_path.exists() else {}
+    )
     data = {
         "generated_at": datetime.now().astimezone().isoformat(
             timespec="seconds"
@@ -383,6 +389,7 @@ def main() -> None:
         "pre_breakout": pre_breakout,
         "pre_breakout_monthly": pre_breakout_monthly,
         "event_shadow": event_shadow,
+        "strategy_comparison": strategy_comparison,
     }
     html = TEMPLATE.read_text(encoding="utf-8").replace(
         "__TITAN_DATA__",
