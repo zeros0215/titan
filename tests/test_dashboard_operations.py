@@ -168,6 +168,19 @@ class DashboardOperationsTest(unittest.TestCase):
         self.assertIn("개별 목표가 매도", self.template)
         self.assertIn("급락 시 매수 중단", self.template)
 
+    def test_kiwoom_paper_tab_is_read_only_and_fail_closed(self) -> None:
+        self.assertIn('data-tab="kiwoom-paper-panel"', self.template)
+        self.assertIn('id="kiwoom-paper-panel"', self.template)
+        self.assertIn("V1.3-S80-N7-TP5-SL10-CANDIDATE", self.template)
+        self.assertIn("PAPER · MOCK 전용", self.template)
+        self.assertIn("이 화면은 상태 조회 전용", self.template)
+        self.assertIn("/api/kiwoom-paper/status", self.template)
+        self.assertIn('id="kiwoom-paper-candidates"', self.template)
+        self.assertIn('id="kiwoom-paper-positions"', self.template)
+        self.assertIn('id="kiwoom-paper-orders"', self.template)
+        self.assertIn("safety.new_orders_allowed===true", self.template)
+        self.assertNotIn("/api/kiwoom-paper/order", self.template)
+
     def test_current_history_uses_only_operational_runs(self) -> None:
         self.assertIn("const operationalRunByDate=new Map()", self.template)
         self.assertIn(

@@ -64,6 +64,7 @@ from research.paper_grid import (
     start as start_paper_grid,
     stop as stop_paper_grid,
 )
+from trading.paper_dashboard import load_paper_dashboard
 
 
 HOST = "127.0.0.1"
@@ -74,6 +75,7 @@ PAPER_GRID_LOCK = threading.Lock()
 OPERATIONAL_VERSION = "V1.3-S80-N7-TP5-SL10-CANDIDATE"
 ACTIVE_TASK: dict[str, str] = {}
 PAPER_GRID_STATE = ROOT / "output" / "paper_grid" / "kodex_233740.json"
+KIWOOM_PAPER_DASHBOARD = ROOT / "output" / "kiwoom_paper" / "dashboard.json"
 
 
 def _mock_current_price(code: str) -> dict[str, object]:
@@ -123,6 +125,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 "started_at": ACTIVE_TASK.get("started_at"),
                 "progress": ACTIVE_TASK.get("progress"),
             })
+            return
+        if path == "/api/kiwoom-paper/status":
+            self._json(200, load_paper_dashboard(KIWOOM_PAPER_DASHBOARD))
             return
         if path not in ("/", "/index.html"):
             self.send_error(404)
