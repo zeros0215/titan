@@ -85,11 +85,15 @@ class KiwoomPaperOrderGateway:
         base_url: str = MOCK_BASE_URL,
         http_client: httpx.Client | None = None,
         clock: Callable[[], datetime] | None = None,
+        auth_client: KiwoomPaperClient | None = None,
+        known_submitted_order_ids: frozenset[str] = frozenset(),
     ) -> None:
         if base_url.rstrip("/") != MOCK_BASE_URL:
             raise ValueError("Kiwoom paper orders only permit the mock domain")
         if maximum_quantity != 1:
             raise ValueError("the initial paper pilot is fixed to one share")
+        if any(not value.strip() for value in known_submitted_order_ids):
+            raise ValueError("known submitted order IDs must not be blank")
         self.submission_enabled = submission_enabled
         self.maximum_quantity = maximum_quantity
         self.clock = clock or (lambda: datetime.now(timezone.utc))
@@ -99,11 +103,11 @@ class KiwoomPaperOrderGateway:
             headers={"Content-Type": "application/json;charset=UTF-8"},
         )
         self._owns_client = http_client is None
-        self._auth = KiwoomPaperClient(
+        self._auth = auth_client or KiwoomPaperClient(
             credentials, http_client=self._client, clock=self.clock
         )
         self._consumed_intent_ids: set[str] = set()
-        self._submitted_order_ids: set[str] = set()
+        self._submitted_order_ids: set[str] = set(known_submitted_order_ids)
 
     def close(self) -> None:
         if self._owns_client:

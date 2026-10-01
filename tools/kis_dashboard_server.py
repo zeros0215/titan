@@ -65,8 +65,22 @@ from research.paper_grid import (
     stop as stop_paper_grid,
 )
 from trading.paper_dashboard import load_paper_dashboard
+from trading.paper_operator_control import PaperOperatorControl
+from trading.paper_automation_control import (
+    PaperAutomationControl, select_automatic_action,
+)
 from trading.kiwoom_paper_sync import synchronize_kiwoom_paper_dashboard
-from broker.kiwoom import KiwoomPaperError
+from trading.kiwoom_s80_order import (
+    submit_s80_paper_candidate, submit_s80_paper_exit,
+)
+from trading.coordinator import PostSubmissionJournalError, SubmissionUncertainError
+from broker.kiwoom import (
+    KiwoomPaperCredentials,
+    KiwoomPaperClient,
+    KiwoomPaperError,
+    KiwoomPaperMarketSessionMonitor,
+    load_market_session_state,
+)
 
 
 HOST = "127.0.0.1"
@@ -74,10 +88,50 @@ PORT = 8765
 RUN_LOCK = threading.Lock()
 PRICE_LOCK = threading.Lock()
 PAPER_GRID_LOCK = threading.Lock()
+KIWOOM_ORDER_LOCK = threading.Lock()
+KIWOOM_API_LOCK = threading.RLock()
 OPERATIONAL_VERSION = "V1.3-S80-N7-TP5-SL10-CANDIDATE"
 ACTIVE_TASK: dict[str, str] = {}
 PAPER_GRID_STATE = ROOT / "output" / "paper_grid" / "kodex_233740.json"
 KIWOOM_PAPER_DASHBOARD = ROOT / "output" / "kiwoom_paper" / "dashboard.json"
+KIWOOM_PAPER_CONTROL = ROOT / "output" / "kiwoom_paper" / "operator_control.json"
+KIWOOM_MARKET_SESSION = ROOT / "output" / "kiwoom_paper" / "market_session.json"
+KIWOOM_AUTOMATION_CONTROL = ROOT / "output" / "kiwoom_paper" / "automation_control.json"
+KIWOOM_SHARED_READER: KiwoomPaperClient | None = None
+
+
+def _kiwoom_status_state() -> dict:
+    state = load_paper_dashboard(KIWOOM_PAPER_DASHBOARD)
+    operator = PaperOperatorControl(KIWOOM_PAPER_CONTROL).load()
+    automation = PaperAutomationControl(KIWOOM_AUTOMATION_CONTROL).load()
+    market = load_market_session_state(KIWOOM_MARKET_SESSION)
+    safety = state["safety"]
+    safety["kill_switch_active"] = operator["kill_switch_active"]
+    ready = (
+        state["connection"].get("status") == "CONNECTED"
+        and state["connection"].get("authenticated") is True
+        and safety.get("reconciliation_ready") is True
+        and state.get("selection", {}).get("ready") is True
+        and market.get("regular_session_open") is True
+        and operator["kill_switch_active"] is False
+    )
+    safety["new_orders_allowed"] = ready
+    reasons = []
+    if operator["kill_switch_active"]:
+        reasons.append("KILL_SWITCH_ACTIVE")
+    if market.get("regular_session_open") is not True:
+        reasons.append("KRX_REGULAR_SESSION_CLOSED")
+    if safety.get("reconciliation_ready") is not True:
+        reasons.append("ACCOUNT_RECONCILIATION_REQUIRED")
+    if state.get("selection", {}).get("ready") is not True:
+        reasons.append("S80_SELECTION_NOT_READY")
+    if automation["mode"] == "OFF":
+        reasons.append("AUTOMATIC_SUBMISSION_DISABLED")
+    safety["blocked_reasons"] = reasons
+    state["operator_control"] = operator
+    state["automation_control"] = automation
+    state["market_session"] = market
+    return state
 
 
 def _mock_current_price(code: str) -> dict[str, object]:
@@ -115,6 +169,8 @@ class ExclusiveThreadingHTTPServer(ThreadingHTTPServer):
 
     allow_reuse_address = True
     allow_reuse_port = False
+    daemon_threads = True
+    block_on_close = False
 
 
 class DashboardHandler(BaseHTTPRequestHandler):
@@ -126,10 +182,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 "task": ACTIVE_TASK.get("task"),
                 "started_at": ACTIVE_TASK.get("started_at"),
                 "progress": ACTIVE_TASK.get("progress"),
+                "stage": ACTIVE_TASK.get("stage"),
             })
             return
         if path == "/api/kiwoom-paper/status":
-            self._json(200, load_paper_dashboard(KIWOOM_PAPER_DASHBOARD))
+            self._json(200, _kiwoom_status_state())
             return
         if path not in ("/", "/index.html"):
             self.send_error(404)
@@ -164,6 +221,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "/api/current-prices",
             "/api/paper-grid",
             "/api/kiwoom-paper/sync",
+            "/api/kiwoom-paper/control",
+            "/api/kiwoom-paper/approval",
+            "/api/kiwoom-paper/submit",
+            "/api/kiwoom-paper/exit",
+            "/api/kiwoom-paper/manual-exit",
+            "/api/kiwoom-paper/automation",
             "/api/news-headlines",
             "/api/run-event-candidates",
             "/api/run-strategy-comparison",
@@ -197,9 +260,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/kiwoom-paper/sync":
             try:
-                state = synchronize_kiwoom_paper_dashboard(
-                    KIWOOM_PAPER_DASHBOARD
-                )
+                with KIWOOM_API_LOCK:
+                    state = synchronize_kiwoom_paper_dashboard(
+                        KIWOOM_PAPER_DASHBOARD, client=KIWOOM_SHARED_READER
+                    )
             except KiwoomPaperError as error:
                 self._json(503, {
                     "message": error.message,
@@ -214,7 +278,25 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     "state": load_paper_dashboard(KIWOOM_PAPER_DASHBOARD),
                 })
                 return
-            self._json(200, {"message": "키움 모의계좌 동기화 완료", "state": state})
+            self._json(200, {
+                "message": "키움 모의계좌 동기화 완료",
+                "state": _kiwoom_status_state(),
+            })
+            return
+        if path in ("/api/kiwoom-paper/control", "/api/kiwoom-paper/approval"):
+            self._kiwoom_operator_control(path)
+            return
+        if path == "/api/kiwoom-paper/submit":
+            self._submit_kiwoom_s80_candidate()
+            return
+        if path == "/api/kiwoom-paper/exit":
+            self._submit_kiwoom_s80_exit()
+            return
+        if path == "/api/kiwoom-paper/manual-exit":
+            self._submit_kiwoom_s80_exit(manual=True)
+            return
+        if path == "/api/kiwoom-paper/automation":
+            self._kiwoom_automation_control()
             return
         if path == "/api/news-headlines":
             self._news_headlines()
@@ -625,6 +707,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
         now = datetime.now()
         try:
             length = int(self.headers.get("Content-Length", "0"))
+            if length < 0 or length > 16_384:
+                raise ValueError("request body is too large")
             payload = json.loads(self.rfile.read(length) or b"{}")
             selection_date = _parse_operational_selection_date(
                 payload.get("date"),
@@ -661,6 +745,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         _set_active_task("S80_OPERATIONAL_SELECTION")
         try:
+            _set_active_progress(5, 100, "실행 준비")
+            _set_active_progress(15, 100, "S80 전체 종목 분석")
             result = subprocess.run(
                 [
                     sys.executable, "-m", "app.main", "kis-pilot",
@@ -677,7 +763,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 text=True,
                 timeout=1800,
             )
+            _set_active_progress(90, 100, "선정 결과 검증")
             build_dashboard()
+            _set_active_progress(100, 100, "완료")
             output = "\n".join(
                 part for part in (result.stdout, result.stderr) if part
             )
@@ -770,8 +858,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 if settings.market_provider.upper() == "MOCK":
                     quote = _mock_paper_grid_quote()
                 else:
-                    if not PRICE_LOCK.acquire(blocking=False):
-                        self._json(409, {"message": "KIS 현재가를 이미 조회 중입니다."})
+                    if not PRICE_LOCK.acquire(timeout=10):
+                        self._json(409, {
+                            "message": (
+                                "KIS 현재가 조회가 10초 이상 계속되고 있습니다. "
+                                "잠시 후 다시 시도해 주세요."
+                            )
+                        })
                         return
                     provider = None
                     try:
@@ -1204,6 +1297,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         _set_active_task("DATA_UPDATE")
         try:
+            _set_active_progress(5, 100, "현재 데이터 범위 확인")
             target = _latest_completed_weekday()
             active_path = ROOT / "output" / "release" / "backtest_data.json"
             active = json.loads(active_path.read_text(encoding="utf-8"))
@@ -1238,6 +1332,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             )
             universe_start = _next_collection_date(universe_current, target)
             if universe_start is not None:
+                _set_active_progress(15, 100, "KRX 종목 데이터 수집")
                 universe_result = KrxUniverseCollector(
                     KrxUniverseClient(auth_key),
                     universe_repository,
@@ -1282,6 +1377,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             )
             price_start = _next_collection_date(price_current, target)
             if price_start is not None:
+                _set_active_progress(35, 100, "KRX 가격 데이터 수집")
                 price_result = KrxPriceCollector(
                     KrxPriceClient(auth_key),
                     price_repository,
@@ -1331,7 +1427,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     "--output", str(active_path),
                 ],
             ]
-            for command in commands:
+            command_progress = (
+                (55, "종목 데이터 빌드"),
+                (72, "가격 데이터 빌드"),
+                (88, "staging 검증 및 승격"),
+            )
+            for command, (progress, stage) in zip(commands, command_progress):
+                _set_active_progress(progress, 100, stage)
                 result = subprocess.run(
                     command,
                     cwd=ROOT,
@@ -1349,7 +1451,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
                         else "데이터 업데이트 단계가 실패했습니다."
                     )
                     raise RuntimeError(message)
+            _set_active_progress(96, 100, "대시보드 갱신")
             build_dashboard()
+            _set_active_progress(100, 100, "완료")
             self._json(200, {
                 "message": "데이터 업데이트 및 활성화가 완료되었습니다.",
                 "coverage_end": target.isoformat(),
@@ -1426,6 +1530,171 @@ class DashboardHandler(BaseHTTPRequestHandler):
         finally:
             RUN_LOCK.release()
 
+    def _kiwoom_operator_control(self, path: str) -> None:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if length < 0 or length > 16_384:
+                raise ValueError("request body is too large")
+            payload = json.loads(self.rfile.read(length) or b"{}")
+            if not isinstance(payload, dict):
+                raise ValueError("request body must be an object")
+            control = PaperOperatorControl(KIWOOM_PAPER_CONTROL)
+            if path == "/api/kiwoom-paper/control":
+                if not isinstance(payload.get("active"), bool):
+                    raise ValueError("active must be boolean")
+                state = control.set_kill_switch(
+                    payload["active"],
+                    operator_ref=str(payload.get("operator_ref") or ""),
+                    confirmation=str(payload.get("confirmation") or ""),
+                )
+                message = "Kill Switch 활성화 완료" if payload["active"] else "Kill Switch 해제 완료"
+            else:
+                if not isinstance(payload.get("approved"), bool):
+                    raise ValueError("approved must be boolean")
+                state = control.decide(
+                    intent_id=str(payload.get("intent_id") or ""),
+                    approved=payload["approved"],
+                    operator_ref=str(payload.get("operator_ref") or ""),
+                )
+                message = "운영자 승인 기록 완료" if payload["approved"] else "운영자 거부 기록 완료"
+        except (ValueError, TypeError, json.JSONDecodeError) as error:
+            self._json(400, {"message": str(error), "code": "PAPER_OPERATOR_CONTROL_INVALID"})
+            return
+        except OSError:
+            self._json(500, {"message": "운영자 제어 상태를 저장하지 못했습니다.", "code": "PAPER_OPERATOR_CONTROL_WRITE_FAILED"})
+            return
+        self._json(200, {"message": message, "operator_control": state})
+
+    def _submit_kiwoom_s80_candidate(self) -> None:
+        if not KIWOOM_ORDER_LOCK.acquire(blocking=False):
+            self._json(409, {
+                "message": "다른 키움 모의주문을 처리 중입니다.",
+                "code": "PAPER_ORDER_BUSY",
+            })
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if length < 0 or length > 16_384:
+                raise ValueError("request body is too large")
+            payload = json.loads(self.rfile.read(length) or b"{}")
+            intent_id = str(payload.get("intent_id") or "").strip()
+            if not intent_id:
+                raise ValueError("intent_id is required")
+            with KIWOOM_API_LOCK:
+                result = submit_s80_paper_candidate(
+                    intent_id,
+                    dashboard_path=KIWOOM_PAPER_DASHBOARD,
+                    control_path=KIWOOM_PAPER_CONTROL,
+                    journal_path=ROOT / "output" / "kiwoom_paper" / "s80_orders.sqlite",
+                    reader=KIWOOM_SHARED_READER,
+                )
+            if result.order is None:
+                self._json(409, {
+                    "message": "위험검사를 통과하지 못했습니다.",
+                    "code": "PAPER_RISK_REJECTED",
+                    "reasons": [reason.value for reason in result.decision.reasons],
+                })
+                return
+            self._json(200, {
+                "message": "S80 모의매수 1주 주문이 접수되었습니다.",
+                "intent_id": intent_id,
+                "broker_order_id": result.order.broker_order_id,
+                "status": result.order.status.value,
+            })
+        except (SubmissionUncertainError, PostSubmissionJournalError):
+            PaperOperatorControl(KIWOOM_PAPER_CONTROL).set_kill_switch(
+                True, operator_ref="paper-order-uncertain"
+            )
+            self._json(502, {
+                "message": "주문 결과를 확정할 수 없습니다. 재시도하지 말고 주문내역을 확인하세요.",
+                "code": "PAPER_SUBMISSION_UNCERTAIN",
+            })
+        except KiwoomPaperError as exc:
+            self._json(503, {"message": exc.message, "code": exc.code})
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            self._json(400, {
+                "message": str(exc), "code": "PAPER_ORDER_REJECTED"
+            })
+        finally:
+            KIWOOM_ORDER_LOCK.release()
+
+    def _submit_kiwoom_s80_exit(self, *, manual: bool = False) -> None:
+        if not KIWOOM_ORDER_LOCK.acquire(blocking=False):
+            self._json(409, {
+                "message": "다른 키움 모의주문을 처리 중입니다.",
+                "code": "PAPER_ORDER_BUSY",
+            })
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(length) or b"{}")
+            intent_id = str(payload.get("intent_id") or "").strip()
+            if not intent_id:
+                raise ValueError("intent_id is required")
+            if manual:
+                symbol = intent_id.rsplit("-", 1)[-1]
+                required = f"SELL-{symbol}-1-PAPER"
+                if str(payload.get("confirmation") or "") != required:
+                    raise ValueError(f"exact confirmation is required: {required}")
+            with KIWOOM_API_LOCK:
+                result = submit_s80_paper_exit(
+                    intent_id,
+                    dashboard_path=KIWOOM_PAPER_DASHBOARD,
+                    control_path=KIWOOM_PAPER_CONTROL,
+                    journal_path=ROOT / "output" / "kiwoom_paper" / "s80_orders.sqlite",
+                    reader=KIWOOM_SHARED_READER,
+                    manual=manual,
+                )
+            if result.order is None:
+                self._json(409, {
+                    "message": "매도 위험검사를 통과하지 못했습니다.",
+                    "code": "PAPER_EXIT_RISK_REJECTED",
+                    "reasons": [reason.value for reason in result.decision.reasons],
+                })
+                return
+            self._json(200, {
+                "message": "S80 모의매도 1주 주문이 접수되었습니다.",
+                "intent_id": intent_id,
+                "broker_order_id": result.order.broker_order_id,
+                "status": result.order.status.value,
+            })
+        except (SubmissionUncertainError, PostSubmissionJournalError):
+            PaperOperatorControl(KIWOOM_PAPER_CONTROL).set_kill_switch(
+                True, operator_ref="paper-exit-uncertain"
+            )
+            self._json(502, {
+                "message": "매도 결과를 확정할 수 없습니다. 재시도하지 말고 주문내역을 확인하세요.",
+                "code": "PAPER_EXIT_UNCERTAIN",
+            })
+        except KiwoomPaperError as exc:
+            self._json(503, {"message": exc.message, "code": exc.code})
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            self._json(400, {
+                "message": str(exc), "code": "PAPER_EXIT_REJECTED"
+            })
+        finally:
+            KIWOOM_ORDER_LOCK.release()
+
+    def _kiwoom_automation_control(self) -> None:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if length < 0 or length > 16_384:
+                raise ValueError("request body is too large")
+            payload = json.loads(self.rfile.read(length) or b"{}")
+            state = PaperAutomationControl(KIWOOM_AUTOMATION_CONTROL).set_mode(
+                str(payload.get("mode") or ""),
+                operator_ref=str(payload.get("operator_ref") or ""),
+                confirmation=str(payload.get("confirmation") or ""),
+            )
+            self._json(200, {
+                "message": f"모의 자동화 모드가 {state['mode']}로 변경되었습니다.",
+                "automation_control": state,
+            })
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            self._json(400, {
+                "message": str(exc), "code": "PAPER_AUTOMATION_CONTROL_REJECTED"
+            })
+
     def _json(self, status: int, payload: dict[str, object]) -> None:
         content = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
@@ -1468,8 +1737,12 @@ def _clear_active_task() -> None:
     ACTIVE_TASK.clear()
 
 
-def _set_active_progress(completed: int, total: int) -> None:
+def _set_active_progress(
+    completed: int, total: int, stage: str | None = None
+) -> None:
     ACTIVE_TASK["progress"] = round(completed / total * 100) if total else 100
+    if stage is not None:
+        ACTIVE_TASK["stage"] = stage
 
 
 def _save_operational_entry_snapshot(
@@ -1761,12 +2034,41 @@ def _next_collection_date(current: date, target: date) -> date | None:
 
 
 def main() -> None:
+    global KIWOOM_SHARED_READER
     build_dashboard()
     server = ExclusiveThreadingHTTPServer((HOST, PORT), DashboardHandler)
     url = f"http://{HOST}:{PORT}"
     print(f"TITAN dashboard: {url}")
     print("종료: Ctrl+C")
+    market_monitor = None
+    try:
+        credentials = KiwoomPaperCredentials.from_environment()
+        KIWOOM_SHARED_READER = KiwoomPaperClient(credentials)
+        market_monitor = KiwoomPaperMarketSessionMonitor(
+            credentials, KIWOOM_MARKET_SESSION
+        )
+        threading.Thread(
+            target=market_monitor.run,
+            name="kiwoom-paper-market-session",
+            daemon=True,
+        ).start()
+        print("키움 모의 장 상태: 0s 상시 감시 시작")
+    except KiwoomPaperError as error:
+        print(f"키움 모의 장 상태 감시 비활성: {error.code}")
+    if KIWOOM_SHARED_READER is not None:
+        threading.Thread(
+            target=_paper_automation_scheduler,
+            args=(KIWOOM_SHARED_READER,),
+            name="s80-paper-automation",
+            daemon=True,
+        ).start()
+        print("S80 모의 자동화: 제어 모드 감시 시작 (기본 OFF)")
     if os.getenv("TITAN_EVENT_AUTO", "1") != "0":
+        threading.Thread(
+            target=_s80_selection_prerequisite_scheduler,
+            name="s80-selection-prerequisite",
+            daemon=True,
+        ).start()
         threading.Thread(
             target=_event_snapshot_scheduler,
             name="event-snapshot-scheduler",
@@ -1780,7 +2082,46 @@ def main() -> None:
     except KeyboardInterrupt:
         pass
     finally:
+        if market_monitor is not None:
+            market_monitor.stop()
+        if KIWOOM_SHARED_READER is not None:
+            KIWOOM_SHARED_READER.close()
+            KIWOOM_SHARED_READER = None
         server.server_close()
+
+
+def _s80_selection_prerequisite_scheduler() -> None:
+    """Ensure a prior-weekday PASS result exists before paper synchronization."""
+    attempted_at: dict[str, datetime] = {}
+    threading.Event().wait(5)
+    while True:
+        now = datetime.now().astimezone()
+        if now.weekday() < 5 and (8, 30) <= (now.hour, now.minute) <= (15, 20):
+            target = _latest_completed_weekday(now)
+            key = target.isoformat()
+            cached = _find_cached_operational_selection(
+                ROOT / "output" / "kis_v1_1" / "runs", target
+            )
+            previous = attempted_at.get(key)
+            retry_ready = previous is None or (now - previous).total_seconds() >= 300
+            if cached is None and retry_ready and not RUN_LOCK.locked():
+                attempted_at[key] = now
+                try:
+                    httpx.post(
+                        f"http://{HOST}:{PORT}/api/run-operational-selection",
+                        json={"date": key, "automatic": True},
+                        timeout=1800,
+                    )
+                except httpx.HTTPError as exc:
+                    print(
+                        "S80 prerequisite selection failed: "
+                        f"{type(exc).__name__}"
+                    )
+        cutoff = (now.date() - timedelta(days=7)).isoformat()
+        attempted_at = {
+            key: value for key, value in attempted_at.items() if key >= cutoff
+        }
+        threading.Event().wait(60)
 
 
 def _event_snapshot_scheduler() -> None:
@@ -1811,6 +2152,88 @@ def _event_snapshot_scheduler() -> None:
         today = now.date().isoformat()
         triggered = {key for key in triggered if key[0] >= today}
         threading.Event().wait(30)
+
+
+def _paper_automation_scheduler(reader: KiwoomPaperClient) -> None:
+    """Run at most one fail-closed S80 paper action per cycle."""
+    automation = PaperAutomationControl(KIWOOM_AUTOMATION_CONTROL)
+    operator = PaperOperatorControl(KIWOOM_PAPER_CONTROL)
+    journal_path = ROOT / "output" / "kiwoom_paper" / "s80_orders.sqlite"
+    threading.Event().wait(65)
+    while True:
+        mode = automation.load()["mode"]
+        now = datetime.now().astimezone()
+        within_session = (
+            now.weekday() < 5
+            and (9, 0) <= (now.hour, now.minute) <= (15, 20)
+        )
+        if mode != "OFF" and within_session:
+            if mode != "SHADOW" and operator.load()["kill_switch_active"]:
+                automation.record_cycle(action=None, error="KILL_SWITCH_ACTIVE")
+            elif KIWOOM_ORDER_LOCK.acquire(blocking=False):
+                try:
+                    with KIWOOM_API_LOCK:
+                        state = synchronize_kiwoom_paper_dashboard(
+                            KIWOOM_PAPER_DASHBOARD,
+                            journal_path=journal_path,
+                            client=reader,
+                        )
+                        action = None
+                        selected_action = select_automatic_action(
+                            state, mode, hour=now.hour, minute=now.minute
+                        )
+                        if selected_action is not None:
+                            side, intent_id = selected_action
+                            if side == "SELL":
+                                operator.decide(
+                                    intent_id=intent_id, approved=True,
+                                    operator_ref="s80-paper-automation",
+                                )
+                                result = submit_s80_paper_exit(
+                                    intent_id,
+                                    dashboard_path=KIWOOM_PAPER_DASHBOARD,
+                                    control_path=KIWOOM_PAPER_CONTROL,
+                                    journal_path=journal_path,
+                                    reader=reader,
+                                )
+                                action = (
+                                    f"SELL:{result.order.broker_order_id}"
+                                    if result.order else "SELL_RISK_REJECTED"
+                                )
+                            else:
+                                operator.decide(
+                                    intent_id=intent_id, approved=True,
+                                    operator_ref="s80-paper-automation",
+                                )
+                                result = submit_s80_paper_candidate(
+                                    intent_id,
+                                    dashboard_path=KIWOOM_PAPER_DASHBOARD,
+                                    control_path=KIWOOM_PAPER_CONTROL,
+                                    journal_path=journal_path,
+                                    reader=reader,
+                                )
+                                action = (
+                                    f"BUY:{result.order.broker_order_id}"
+                                    if result.order else "BUY_RISK_REJECTED"
+                                )
+                    automation.record_cycle(
+                        action=action or ("SHADOW_SYNC" if mode == "SHADOW" else "NO_SIGNAL")
+                    )
+                except (SubmissionUncertainError, PostSubmissionJournalError):
+                    operator.set_kill_switch(
+                        True, operator_ref="paper-automation-uncertain"
+                    )
+                    automation.record_cycle(
+                        action=None, error="SUBMISSION_UNCERTAIN"
+                    )
+                except Exception as exc:
+                    automation.record_cycle(
+                        action=None,
+                        error=str(getattr(exc, "code", type(exc).__name__)),
+                    )
+                finally:
+                    KIWOOM_ORDER_LOCK.release()
+        threading.Event().wait(60)
 
 
 if __name__ == "__main__":

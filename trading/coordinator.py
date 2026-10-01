@@ -35,12 +35,14 @@ class OrderCoordinator:
         journal: ExecutionJournal,
         risk_manager: RiskManager,
         *,
+        approved_submitter: Callable[[RiskDecision, RiskContext], BrokerOrder] | None = None,
         clock: Callable[[], datetime] | None = None,
         event_id_factory: Callable[[], str] | None = None,
     ) -> None:
         self.broker = broker
         self.journal = journal
         self.risk_manager = risk_manager
+        self.approved_submitter = approved_submitter
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.event_id_factory = event_id_factory or (lambda: uuid4().hex)
 
@@ -75,6 +77,23 @@ class OrderCoordinator:
         )
         if not decision.approved or decision.request is None:
             return CoordinationResult(decision, None, ())
+        if self.approved_submitter is not None:
+            prepare = getattr(self.approved_submitter, "prepare_submission", None)
+            if prepare is not None:
+                prepare(decision, context)
+            else:
+                preflight = getattr(self.approved_submitter, "preflight", None)
+                if preflight is not None:
+                    preflight(decision, context)
+            approval_payload = getattr(
+                self.approved_submitter, "approval_event_payload", None
+            )
+            if approval_payload is not None:
+                self._append(
+                    EventType.OPERATOR_ACTION,
+                    intent.intent_id,
+                    approval_payload(decision),
+                )
         self._append(
             EventType.ORDER_SUBMISSION_STARTED,
             intent.intent_id,
@@ -84,7 +103,10 @@ class OrderCoordinator:
             },
         )
         try:
-            order = self.broker.submit_order(decision.request)
+            if self.approved_submitter is None:
+                order = self.broker.submit_order(decision.request)
+            else:
+                order = self.approved_submitter(decision, context)
         except Exception as error:
             raise SubmissionUncertainError(
                 f"submission outcome is unknown for {intent.intent_id}; do not retry"

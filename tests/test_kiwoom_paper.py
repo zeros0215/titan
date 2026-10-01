@@ -135,9 +135,10 @@ class KiwoomPaperClientTest(unittest.TestCase):
                     "io_tp_nm": "+매수",
                     "ord_qty": "1",
                     "ord_uv": "70000",
+                    "cntr_uv": "70100",
                     "cntr_qty": "1",
                     "ord_remnq": "0",
-                    "ord_tm": "090015",
+                    "ord_tm": "09:00:15",
                     "dmst_stex_tp": "KRX",
                 }],
             })
@@ -159,7 +160,86 @@ class KiwoomPaperClientTest(unittest.TestCase):
         self.assertEqual("0000024", orders[0].broker_order_id)
         self.assertEqual("005930", orders[0].symbol)
         self.assertEqual(1, orders[0].filled_quantity)
+        self.assertEqual(Decimal("70100"), orders[0].order_price)
         self.assertEqual("KRX", orders[0].venue)
+        self.assertEqual((9, 0, 15), (
+            orders[0].ordered_at.hour,
+            orders[0].ordered_at.minute,
+            orders[0].ordered_at.second,
+        ))
+
+    def test_reads_stock_info_with_official_daily_limits(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/oauth2/token":
+                return httpx.Response(200, json={
+                    "token": "private-token", "expires_dt": "20300102030405",
+                })
+            self.assertEqual("ka10001", request.headers["api-id"])
+            self.assertEqual("/api/dostk/stkinfo", request.url.path)
+            self.assertEqual('{"stk_cd":"005930"}', request.read().decode())
+            return httpx.Response(200, json={
+                "return_code": 0,
+                "stk_cd": "A005930",
+                "stk_nm": "삼성전자",
+                "cur_prc": "+70100",
+                "base_pric": "70000",
+                "open_pric": "+69500",
+                "lst_pric": "49000",
+                "upl_pric": "91000",
+            })
+
+        client = KiwoomPaperClient(
+            KiwoomPaperCredentials("paper-key", "paper-secret"),
+            http_client=httpx.Client(
+                transport=httpx.MockTransport(handler),
+                base_url="https://mockapi.kiwoom.com",
+            ),
+            clock=lambda: datetime(2029, 1, 1, tzinfo=timezone.utc),
+            wait=lambda _: None,
+        )
+        info = client.stock_info("005930")
+
+        self.assertEqual("005930", info.symbol)
+        self.assertEqual("삼성전자", info.name)
+        self.assertEqual(Decimal("70100"), info.current_price)
+        self.assertEqual(Decimal("69500"), info.open_price)
+        self.assertEqual(Decimal("49000"), info.lower_limit_price)
+        self.assertEqual(Decimal("91000"), info.upper_limit_price)
+
+    def test_read_only_stock_info_retries_mock_rate_limit(self) -> None:
+        calls = 0
+        waits = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            if request.url.path == "/oauth2/token":
+                return httpx.Response(200, json={
+                    "token": "private-token", "expires_dt": "20300102030405",
+                })
+            calls += 1
+            if calls == 1:
+                return httpx.Response(200, json={
+                    "return_code": 5,
+                    "return_msg": "허용된 요청 개수를 초과하였습니다[1700]",
+                })
+            return httpx.Response(200, json={
+                "return_code": 0, "stk_cd": "005930", "stk_nm": "삼성전자",
+                "cur_prc": "100", "base_pric": "100", "open_pric": "100",
+                "lst_pric": "70", "upl_pric": "130",
+            })
+
+        client = KiwoomPaperClient(
+            KiwoomPaperCredentials("paper-key", "paper-secret"),
+            http_client=httpx.Client(
+                transport=httpx.MockTransport(handler),
+                base_url="https://mockapi.kiwoom.com",
+            ),
+            clock=lambda: datetime(2029, 1, 1, tzinfo=timezone.utc),
+            wait=waits.append,
+        )
+        self.assertEqual("005930", client.stock_info("005930").symbol)
+        self.assertEqual(2, calls)
+        self.assertIn(1.25, waits)
 
 
 if __name__ == "__main__":

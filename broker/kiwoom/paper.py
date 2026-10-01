@@ -19,7 +19,7 @@ from trading.model import OrderSide
 MOCK_BASE_URL = "https://mockapi.kiwoom.com"
 TOKEN_PATH = "/oauth2/token"
 ACCOUNT_PATH = "/api/dostk/acnt"
-READ_ONLY_API_IDS = frozenset({"kt00001", "kt00007", "kt00018"})
+READ_ONLY_API_IDS = frozenset({"ka10001", "kt00001", "kt00007", "kt00018"})
 SEOUL = ZoneInfo("Asia/Seoul")
 
 
@@ -106,6 +106,34 @@ class KiwoomPaperOrderObservation:
             raise ValueError("paper order observation must use KRX")
 
 
+@dataclass(frozen=True, slots=True)
+class KiwoomPaperStockInfo:
+    symbol: str
+    name: str
+    current_price: Decimal
+    reference_price: Decimal
+    open_price: Decimal
+    lower_limit_price: Decimal
+    upper_limit_price: Decimal
+    observed_at: datetime
+
+    def __post_init__(self) -> None:
+        if len(self.symbol) != 6 or not self.symbol.isdigit():
+            raise ValueError("symbol must be a six-digit KRX code")
+        if not self.name.strip():
+            raise ValueError("stock name is required")
+        prices = (
+            self.current_price, self.reference_price, self.open_price,
+            self.lower_limit_price, self.upper_limit_price,
+        )
+        if any(value <= 0 for value in prices):
+            raise ValueError("stock prices must be positive")
+        if not self.lower_limit_price <= self.reference_price <= self.upper_limit_price:
+            raise ValueError("reference price must be inside daily limits")
+        if self.observed_at.tzinfo is None or self.observed_at.utcoffset() is None:
+            raise ValueError("observed_at must be timezone-aware")
+
+
 class KiwoomPaperClient:
     """Kiwoom client permanently restricted to mock authentication/account reads."""
 
@@ -161,6 +189,24 @@ class KiwoomPaperClient:
             unrealized_pnl=_signed_decimal(balance.get("tot_evlt_pl")),
             positions=positions,
             synchronized_at=self._clock(),
+        )
+
+    def stock_info(self, symbol: str) -> KiwoomPaperStockInfo:
+        if len(symbol) != 6 or not symbol.isdigit():
+            raise ValueError("symbol must be a six-digit KRX code")
+        payload = self._read_all(
+            "ka10001", {"stk_cd": symbol}, path="/api/dostk/stkinfo"
+        )
+        returned_symbol = str(payload.get("stk_cd") or symbol).lstrip("A").zfill(6)
+        return KiwoomPaperStockInfo(
+            returned_symbol,
+            str(payload.get("stk_nm") or "").strip(),
+            abs(_decimal(payload.get("cur_prc"))),
+            abs(_decimal(payload.get("base_pric"))),
+            abs(_decimal(payload.get("open_pric"))),
+            abs(_decimal(payload.get("lst_pric"))),
+            abs(_decimal(payload.get("upl_pric"))),
+            self._clock(),
         )
 
     def order_fill_details(
@@ -219,7 +265,9 @@ class KiwoomPaperClient:
             and self._clock() + timedelta(minutes=1) < self._token_expires_at
         )
 
-    def _read_all(self, api_id: str, body: dict[str, str]) -> dict:
+    def _read_all(
+        self, api_id: str, body: dict[str, str], *, path: str = ACCOUNT_PATH
+    ) -> dict:
         if api_id not in READ_ONLY_API_IDS:
             raise KiwoomPaperError(
                 "READ_ONLY_VIOLATION", f"API ID is not allowed: {api_id}"
@@ -228,22 +276,31 @@ class KiwoomPaperClient:
         continuation = None
         next_key = None
         for _ in range(10):
-            self._throttle(api_id)
             headers = {
                 "authorization": f"Bearer {self._access_token()}",
                 "api-id": api_id,
             }
             if continuation == "Y" and next_key:
                 headers.update({"cont-yn": "Y", "next-key": next_key})
-            try:
-                response = self._client.post(
-                    ACCOUNT_PATH, headers=headers, json=body
+            for attempt in range(3):
+                self._throttle(api_id)
+                try:
+                    response = self._client.post(
+                        path, headers=headers, json=body
+                    )
+                except httpx.HTTPError as error:
+                    raise KiwoomPaperError(
+                        "PAPER_ACCOUNT_TRANSPORT_ERROR", type(error).__name__
+                    ) from error
+                payload = _response_payload(response)
+                message = str(payload.get("return_msg") or "")
+                rate_limited = (
+                    str(payload.get("return_code")) == "5"
+                    and ("1700" in message or "요청 개수" in message)
                 )
-            except httpx.HTTPError as error:
-                raise KiwoomPaperError(
-                    "PAPER_ACCOUNT_TRANSPORT_ERROR", type(error).__name__
-                ) from error
-            payload = _response_payload(response)
+                if not rate_limited or attempt == 2:
+                    break
+                self._wait(1.25 * (attempt + 1))
             if response.is_error or payload.get("return_code") not in (None, 0, "0"):
                 raise _api_error(response, payload, "PAPER_ACCOUNT_READ_FAILED")
             _merge_page(combined, payload)
@@ -364,13 +421,22 @@ def _order_observation(
         raise KiwoomPaperError(
             "PAPER_UNKNOWN_ORDER_SIDE", "order history contains an unknown side"
         )
-    time_text = str(row.get("ord_tm") or "").strip().zfill(6)[-6:]
+    raw_time = str(row.get("ord_tm") or "").strip()
+    time_parts = raw_time.split(":")
+    if len(time_parts) == 3 and all(part.isdigit() for part in time_parts):
+        time_text = "".join(part.zfill(2) for part in time_parts)
+    else:
+        time_text = raw_time.zfill(6)[-6:]
     try:
         ordered_time = datetime.strptime(time_text, "%H%M%S").time()
     except ValueError as error:
         raise KiwoomPaperError(
             "PAPER_INVALID_ORDER_TIME", "order history contains an invalid time"
         ) from error
+    execution_price = _decimal(row.get("cntr_uv"))
+    observed_price = (
+        execution_price if execution_price > 0 else _decimal(row.get("ord_uv"))
+    )
     return KiwoomPaperOrderObservation(
         broker_order_id=str(row.get("ord_no") or "").strip(),
         symbol=symbol.zfill(6),
@@ -378,7 +444,7 @@ def _order_observation(
         requested_quantity=_integer(row.get("ord_qty")),
         filled_quantity=_integer(row.get("cntr_qty")),
         remaining_quantity=_integer(row.get("ord_remnq")),
-        order_price=_decimal(row.get("ord_uv")),
+        order_price=observed_price,
         ordered_at=datetime.combine(
             order_date.date(), ordered_time, tzinfo=SEOUL
         ),

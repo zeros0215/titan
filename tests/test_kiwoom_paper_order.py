@@ -169,6 +169,32 @@ class KiwoomPaperOrderGatewayTest(unittest.TestCase):
                 broker_order_id="manual-order", symbol="005930"
             )
 
+    def test_cancel_accepts_journal_recovered_order_after_restart(self) -> None:
+        def handler(request):
+            if request.url.path == "/oauth2/token":
+                return self.token_response(request)
+            self.assertEqual("kt10003", request.headers["api-id"])
+            return httpx.Response(200, json={
+                "ord_no": "0000025", "return_code": 0,
+            })
+
+        gateway = KiwoomPaperOrderGateway(
+            KiwoomPaperCredentials("paper-key", "paper-secret"),
+            submission_enabled=True,
+            known_submitted_order_ids=frozenset({"0000024"}),
+            http_client=httpx.Client(
+                transport=httpx.MockTransport(handler),
+                base_url="https://mockapi.kiwoom.com",
+            ),
+            clock=lambda: NOW,
+        )
+
+        result = gateway.cancel_order(
+            broker_order_id="0000024", symbol="005930"
+        )
+
+        self.assertEqual("0000025", result)
+
     def test_authorization_requires_both_approvals_and_short_ttl(self) -> None:
         request = self.request()
         rejected_risk = RiskDecision(
