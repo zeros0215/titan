@@ -5,6 +5,7 @@
 logs/
 output/
 cache/
+dashboard/index.html
 
 .pytest_cache/
 .coverage
