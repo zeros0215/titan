@@ -12,6 +12,22 @@ from trading.paper_dashboard import STRATEGY_VERSION
 
 
 OBSERVATION_STRATEGY_VERSION = "V1.3-S80-OBSERVATION-PAPER"
+MAXIMUM_ENTRY_RISE = Decimal("0.03")
+
+
+def exceeds_entry_rise_limit(
+    reference_price: Decimal,
+    opening_price: Decimal,
+    current_price: Decimal,
+) -> bool:
+    """Block chasing a price over 3% above either prior close or open."""
+    if min(reference_price, opening_price, current_price) <= 0:
+        return True
+    ceiling = Decimal("1") + MAXIMUM_ENTRY_RISE
+    return (
+        current_price > reference_price * ceiling
+        or current_price > opening_price * ceiling
+    )
 
 
 def load_latest_s80_selection(
@@ -88,6 +104,10 @@ def build_s80_paper_candidates(
             eligible, reason = False, "오늘 주문 존재"
         elif abs(gap) > Decimal("0.03"):
             eligible, reason = False, "시가 갭 ±3% 초과"
+        elif exceeds_entry_rise_limit(
+            quote.reference_price, quote.open_price, quote.current_price
+        ):
+            eligible, reason = False, "현재가 +3% 추격매수 제한"
         elif remaining_slots <= 0:
             eligible, reason = False, f"최대 {maximum_positions}종목 보유 한도"
         if eligible:

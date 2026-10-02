@@ -26,6 +26,7 @@ from trading.paper_operator_control import PaperOperatorControl
 from trading.paper_position_lifecycle import (
     exit_signal, holding_sessions, managed_s80_symbols,
 )
+from trading.s80_paper_candidates import exceeds_entry_rise_limit
 from trading.reconciliation import ReconciliationResult
 from trading.risk import RiskContext, RiskLimits, RiskManager
 
@@ -78,6 +79,10 @@ def submit_s80_paper_candidate(
         opening_gap = info.open_price / info.reference_price - Decimal("1")
         if abs(opening_gap) > Decimal("0.03"):
             raise ValueError("opening gap exceeds the S80 three percent limit")
+        if exceeds_entry_rise_limit(
+            info.reference_price, info.open_price, info.current_price
+        ):
+            raise ValueError("current price exceeds the S80 three percent entry-rise limit")
 
         now = datetime.now(timezone.utc)
         account = AccountSnapshot(

@@ -8,6 +8,12 @@ from decimal import Decimal
 from trading.journal import EventType, SQLiteExecutionJournal
 
 
+S80_STRATEGY_VERSIONS = {
+    "V1.3-S80-N7-TP5-SL10-CANDIDATE",
+    "V1.3-S80-OBSERVATION-PAPER",
+}
+
+
 def holding_sessions(opened_on: date, as_of: date) -> int:
     if opened_on > as_of:
         raise ValueError("position open date cannot be in the future")
@@ -48,10 +54,7 @@ def managed_s80_positions(journal: SQLiteExecutionJournal) -> dict[str, str]:
     for record in journal.records():
         event = record.event
         if event.event_type is EventType.INTENT_RECORDED and event.intent_id:
-            if str(event.payload.get("strategy_version")) in {
-                "V1.3-S80-N7-TP5-SL10-CANDIDATE",
-                "V1.3-S80-OBSERVATION-PAPER",
-            }:
+            if str(event.payload.get("strategy_version")) in S80_STRATEGY_VERSIONS:
                 intents[event.intent_id] = (
                     str(event.payload.get("symbol") or ""),
                     str(event.payload.get("side") or ""),
@@ -68,3 +71,81 @@ def managed_s80_positions(journal: SQLiteExecutionJournal) -> dict[str, str]:
 
 def managed_s80_symbols(journal: SQLiteExecutionJournal) -> set[str]:
     return set(managed_s80_positions(journal))
+
+
+def realized_s80_performance(journal: SQLiteExecutionJournal) -> dict[str, object]:
+    """Aggregate completed S80 round trips from durable fill events.
+
+    Buy lots are matched FIFO by symbol. A completed trade is counted for each
+    sell intent whose filled quantity can be fully matched to earlier buys.
+    Recorded broker fees are deducted from realized P&L.
+    """
+    integrity = journal.verify()
+    if not integrity.valid:
+        return {
+            "realized_pnl": Decimal("0"),
+            "completed_trades": 0,
+            "winning_trades": 0,
+        }
+
+    intents: dict[str, tuple[str, str]] = {}
+    fills: dict[str, list[tuple[Decimal, int, Decimal]]] = {}
+    for record in journal.records():
+        event = record.event
+        if event.event_type is EventType.INTENT_RECORDED and event.intent_id:
+            if str(event.payload.get("strategy_version")) in S80_STRATEGY_VERSIONS:
+                intents[event.intent_id] = (
+                    str(event.payload.get("symbol") or ""),
+                    str(event.payload.get("side") or ""),
+                )
+        elif event.event_type is EventType.FILL_RECORDED and event.intent_id in intents:
+            fills.setdefault(event.intent_id, []).append((
+                Decimal(str(event.payload.get("price") or "0")),
+                int(event.payload.get("quantity") or 0),
+                Decimal(str(event.payload.get("fee") or "0")),
+            ))
+
+    lots: dict[str, list[list[object]]] = {}
+    realized = Decimal("0")
+    completed = 0
+    wins = 0
+    for intent_id, (symbol, side) in intents.items():
+        intent_fills = fills.get(intent_id, [])
+        if not intent_fills:
+            continue
+        if side == "BUY":
+            for price, quantity, fee in intent_fills:
+                if price > 0 and quantity > 0:
+                    lots.setdefault(symbol, []).append([quantity, price, fee])
+            continue
+        if side != "SELL":
+            continue
+
+        sell_quantity = sum(item[1] for item in intent_fills)
+        available = sum(int(item[0]) for item in lots.get(symbol, []))
+        if sell_quantity <= 0 or available < sell_quantity:
+            continue
+        proceeds = sum(price * quantity - fee for price, quantity, fee in intent_fills)
+        cost = Decimal("0")
+        remaining = sell_quantity
+        symbol_lots = lots.setdefault(symbol, [])
+        while remaining:
+            quantity, price, fee = symbol_lots[0]
+            matched = min(int(quantity), remaining)
+            fee_share = Decimal(str(fee)) * matched / int(quantity)
+            cost += Decimal(str(price)) * matched + fee_share
+            if matched == int(quantity):
+                symbol_lots.pop(0)
+            else:
+                symbol_lots[0] = [int(quantity) - matched, price, Decimal(str(fee)) - fee_share]
+            remaining -= matched
+        trade_pnl = proceeds - cost
+        realized += trade_pnl
+        completed += 1
+        wins += trade_pnl > 0
+
+    return {
+        "realized_pnl": realized,
+        "completed_trades": completed,
+        "winning_trades": wins,
+    }

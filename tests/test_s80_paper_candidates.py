@@ -114,6 +114,26 @@ class S80PaperCandidatesTest(unittest.TestCase):
         self.assertFalse(rows[0]["eligible"])
         self.assertEqual("최대 7종목 보유 한도", rows[0]["reason"])
 
+    def test_blocks_current_price_over_three_percent_above_close_or_open(self):
+        selection = {
+            "as_of": "2026-10-01T00:00:00",
+            "selected_candidates": [
+                {"code": "253590", "total_score": 79},
+                {"code": "000002", "total_score": 78},
+            ],
+        }
+        rows = build_s80_paper_candidates(
+            selection, {
+                "253590": quote("253590", opening="99", current="109"),
+                "000002": quote("000002", opening="102", current="103"),
+            },
+            held_symbols=set(), ordered_symbols=set(),
+        )
+
+        self.assertFalse(rows[0]["eligible"])
+        self.assertEqual("현재가 +3% 추격매수 제한", rows[0]["reason"])
+        self.assertTrue(rows[1]["eligible"])
+
     def test_selected_candidates_have_priority_over_observation_candidates(self):
         selection = {
             "as_of": "2026-09-29T00:00:00",

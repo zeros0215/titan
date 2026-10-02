@@ -14,6 +14,7 @@ from trading.model import (
     OrderIntent,
     OrderSide,
     OrderStatus,
+    OrderType,
     TradingMode,
     BrokerOrder,
 )
@@ -41,6 +42,7 @@ class RiskReason(str, Enum):
     POSITION_VALUE_LIMIT = "POSITION_VALUE_LIMIT"
     GROSS_EXPOSURE_LIMIT = "GROSS_EXPOSURE_LIMIT"
     INSUFFICIENT_BUYING_POWER = "INSUFFICIENT_BUYING_POWER"
+    INSUFFICIENT_CASH = "INSUFFICIENT_CASH"
     INSUFFICIENT_POSITION = "INSUFFICIENT_POSITION"
     MARKET_RULES_MISSING = "MARKET_RULES_MISSING"
     MARKET_RULES_STALE = "MARKET_RULES_STALE"
@@ -215,6 +217,20 @@ class RiskManager:
             )
             if order_value + reserved > context.account.buying_power:
                 reasons.append(RiskReason.INSUFFICIENT_BUYING_POWER)
+            cash_order_value = order_value
+            if (
+                intent.order_type is OrderType.MARKET
+                and context.market_rules is not None
+                and context.market_rules.symbol == intent.symbol
+            ):
+                # A market buy can execute above the latest quote. Reserve up
+                # to the KRX daily upper limit so the order can never rely on
+                # margin or an unsettled-credit facility.
+                cash_order_value = (
+                    context.market_rules.upper_limit_price * intent.quantity
+                )
+            if cash_order_value + reserved > context.account.cash:
+                reasons.append(RiskReason.INSUFFICIENT_CASH)
         elif intent.quantity + pending_sell > held_quantity:
             reasons.append(RiskReason.INSUFFICIENT_POSITION)
 

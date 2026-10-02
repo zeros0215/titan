@@ -158,6 +158,42 @@ class TradingRiskTest(unittest.TestCase):
 
         self.assertIn(RiskReason.INSUFFICIENT_BUYING_POWER, decision.reasons)
 
+    def test_cash_only_rule_blocks_margin_buying_power(self) -> None:
+        account = AccountSnapshot(
+            "account-ref", NOW, Decimal("50000"), Decimal("3000000"),
+            self.account.positions,
+        )
+        decision = self.manager.evaluate(
+            self.intent(), self.context(account=account)
+        )
+        self.assertIn(RiskReason.INSUFFICIENT_CASH, decision.reasons)
+
+    def test_market_buy_reserves_cash_to_daily_upper_limit(self) -> None:
+        manager = RiskManager(RiskLimits(
+            max_order_value=Decimal("1000000"),
+            max_position_value=Decimal("2000000"),
+            max_gross_exposure=Decimal("5000000"),
+            max_daily_loss=Decimal("100000"),
+            require_market_rules=True,
+        ))
+        account = AccountSnapshot(
+            "account-ref", NOW, Decimal("80000"), Decimal("3000000"),
+            self.account.positions,
+        )
+        intent = OrderIntent(
+            "market-intent", "candidate", "005930", OrderSide.BUY, 1,
+            OrderType.MARKET, NOW,
+        )
+        rules = MarketRulesSnapshot(
+            "005930", "KRX", NOW, True,
+            Decimal("70000"), Decimal("49000"), Decimal("91000"),
+            Decimal("100"),
+        )
+        decision = manager.evaluate(
+            intent, self.context(account=account, market_rules=rules)
+        )
+        self.assertIn(RiskReason.INSUFFICIENT_CASH, decision.reasons)
+
     def test_required_market_rules_are_fail_closed(self) -> None:
         manager = RiskManager(RiskLimits(
             max_order_value=Decimal("1000000"),

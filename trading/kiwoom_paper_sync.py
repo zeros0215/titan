@@ -19,6 +19,7 @@ from trading.s80_paper_candidates import (
 )
 from trading.paper_position_lifecycle import (
     exit_signal, holding_sessions, managed_s80_positions,
+    realized_s80_performance,
 )
 from trading.journal import EventType, JournalEvent, SQLiteExecutionJournal
 from trading.model import TradingMode
@@ -47,6 +48,7 @@ def synchronize_kiwoom_paper_dashboard(
         today = snapshot.synchronized_at.astimezone(SEOUL)
         orders = client.order_fill_details(order_date=today)
         _record_reconciled_fills(journal, orders)
+        performance = realized_s80_performance(journal)
         selection = load_latest_s80_selection(
             selection_runs, today.date(),
             expected_selection_date=_active_coverage_end(active_data_path),
@@ -97,10 +99,10 @@ def synchronize_kiwoom_paper_dashboard(
             "cash": str(snapshot.cash),
             "buying_power": str(snapshot.buying_power),
             "market_value": str(snapshot.market_value),
-            "realized_pnl": None,
+            "realized_pnl": str(performance["realized_pnl"]),
             "unrealized_pnl": str(snapshot.unrealized_pnl),
-            "completed_trades": 0,
-            "winning_trades": 0,
+            "completed_trades": performance["completed_trades"],
+            "winning_trades": performance["winning_trades"],
         },
         "candidates": build_s80_paper_candidates(
             selection,
